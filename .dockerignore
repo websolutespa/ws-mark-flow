@@ -1,0 +1,17 @@
+__pycache__
+*.pyc
+*.pyo
+.venv
+venv
+.env
+.env.*
+!.env.example
+.data
+.git
+.gitignore
+.vscode
+.idea
+dist
+build
+*.egg-info
+app/

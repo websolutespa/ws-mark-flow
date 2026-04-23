@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ws-Mark-Flow AI Converter</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236366f1' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M14 3v4a1 1 0 0 0 1 1h4'/><path d='M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z'/><path d='m12 11 1.5 3 3 1.5-3 1.5L12 20l-1.5-3-3-1.5 3-1.5Z'/></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            50:  '#eef2ff',
+                            100: '#e0e7ff',
+                            200: '#c7d2fe',
+                            300: '#a5b4fc',
+                            400: '#818cf8',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            800: '#3730a3',
+                            900: '#312e81',
+                        },
+                    },
+                    boxShadow: {
+                        card: '0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06)',
+                        'card-hover': '0 4px 6px -1px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06)',
+                        pop: '0 20px 25px -5px rgb(15 23 42 / 0.15), 0 8px 10px -6px rgb(15 23 42 / 0.10)',
+                    },
+                },
+            },
+        };
+    </script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+    /* APP_CSS */
+    </style>
+</head>
+<body class="min-h-screen text-slate-800">
+    <div x-data="converterApp()" x-init="init()">
+        <!-- Header -->
+        <header class="border-b border-slate-200/70 bg-white/70 backdrop-blur-md sticky top-0 z-40">
+            <div class="container mx-auto px-6 py-4 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center shadow-lg shadow-brand-500/30">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5">
+                            <path d="M14 3v4a1 1 0 0 0 1 1h4"/>
+                            <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/>
+                            <path d="m12 11 1.5 3 3 1.5-3 1.5L12 20l-1.5-3-3-1.5 3-1.5Z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold text-slate-900 leading-tight">Ws-Mark-Flow AI Converter</h1>
+                        <p class="text-xs text-slate-500 leading-tight">Convert files from sources to Markdown and upload to destinations</p>
+                    </div>
+                </div>
+                <div class="hidden md:flex items-center gap-2">
+                    <span class="badge bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span class="badge-dot bg-emerald-500"></span>
+                        Online
+                    </span>
+                </div>
+            </div>
+        </header>
+
+        <main class="container mx-auto px-6 py-8">
+        <!-- Tabs -->
+        <div class="mb-6">
+            <nav class="inline-flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-xl shadow-card">
+                <button @click="activeTab = 'sources'"
+                        :class="activeTab === 'sources' ? 'tab-active' : ''"
+                        class="tab-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+                    Sources
+                </button>
+                <button @click="activeTab = 'destinations'"
+                        :class="activeTab === 'destinations' ? 'tab-active' : ''"
+                        class="tab-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+                    Destinations
+                </button>
+                <button @click="activeTab = 'jobs'"
+                        :class="activeTab === 'jobs' ? 'tab-active' : ''"
+                        class="tab-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="m16.24 16.24 2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="m16.24 7.76 2.83-2.83"/></svg>
+                    Jobs
+                </button>
+            </nav>
+        </div>
+
+        <!-- Alert Messages -->
+        <div x-show="alert.show" x-cloak
+             :class="alert.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'"
+             class="border rounded-xl px-4 py-3 mb-4 flex items-start gap-3 shadow-card">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg flex-shrink-0 mt-0.5" x-show="alert.type === 'error'"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg flex-shrink-0 mt-0.5" x-show="alert.type !== 'error'"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            <span class="flex-1 text-sm" x-text="alert.message"></span>
+            <button @click="alert.show = false" class="text-current opacity-60 hover:opacity-100" aria-label="Close">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+
+        <!-- Sources Tab -->
+        <div x-show="activeTab === 'sources'" x-cloak>
+            <div class="flex flex-wrap gap-3 justify-between items-center mb-5">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-900">Source Configurations</h2>
+                    <p class="text-sm text-slate-500">Where your files come from</p>
+                </div>
+                <div class="flex gap-2">
+                    <button @click="exportConfigs(true)" class="btn btn-secondary">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Export
+                    </button>
+                    <label class="btn btn-secondary cursor-pointer">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        Import
+                        <input type="file" accept=".json" class="hidden" @change="importConfigs($event, true)">
+                    </label>
+                    <button @click="openConfigModal(true)" class="btn btn-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="icon"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Add Source
+                    </button>
+                </div>
+            </div>
+            <div class="grid gap-3">
+                <template x-for="config in sources" :key="config._id">
+                    <div class="card p-4">
+                        <div class="flex justify-between items-start gap-4">
+                            <div class="flex items-start gap-3 min-w-0">
+                                <div class="w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center flex-shrink-0 border border-sky-100">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+                                </div>
+                                <div class="min-w-0">
+                                    <h3 class="font-semibold text-slate-900 truncate" x-text="config.name"></h3>
+                                    <p class="text-slate-500 text-sm truncate" x-text="config.description || 'No description'"></p>
+                                    <div class="flex items-center gap-2 mt-2">
+                                        <span class="badge bg-sky-50 text-sky-700 border border-sky-200" x-text="config.type"></span>
+                                        <span class="text-slate-400 text-xs" x-text="'Used ' + config.use_count + ' times'"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1 flex-shrink-0">
+                                <button @click="testConfig(config._id)" class="btn btn-ghost btn-icon-sm text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" title="Test connection">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="m9 12 2 2 4-4"/><path d="M12 3c-4.5 0-9 2-9 9 0 7 4.5 9 9 9s9-2 9-9c0-7-4.5-9-9-9Z"/></svg>
+                                </button>
+                                <button @click="editConfig(config)" class="btn btn-ghost btn-icon-sm hover:text-brand-600" title="Edit">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                                </button>
+                                <button @click="deleteConfig(config._id)" class="btn btn-ghost btn-icon-sm hover:text-red-600 hover:bg-red-50" title="Delete">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="sources.length === 0" class="card p-10 text-center">
+                    <div class="w-12 h-12 rounded-full bg-slate-100 mx-auto flex items-center justify-center text-slate-400 mb-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+                    </div>
+                    <p class="text-slate-500 text-sm">No sources configured yet</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Destinations Tab -->
+        <div x-show="activeTab === 'destinations'" x-cloak>
+            <div class="flex flex-wrap gap-3 justify-between items-center mb-5">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-900">Destination Configurations</h2>
+                    <p class="text-sm text-slate-500">Where converted Markdown is uploaded</p>
+                </div>
+                <div class="flex gap-2">
+                    <button @click="exportConfigs(false)" class="btn btn-secondary">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Export
+                    </button>
+                    <label class="btn btn-secondary cursor-pointer">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        Import
+                        <input type="file" accept=".json" class="hidden" @change="importConfigs($event, false)">
+                    </label>
+                    <button @click="openConfigModal(false)" class="btn btn-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="icon"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Add Destination
+                    </button>
+                </div>
+            </div>
+            <div class="grid gap-3">
+                <template x-for="config in destinations" :key="config._id">
+                    <div class="card p-4">
+                        <div class="flex justify-between items-start gap-4">
+                            <div class="flex items-start gap-3 min-w-0">
+                                <div class="w-10 h-10 rounded-lg bg-fuchsia-50 text-fuchsia-600 flex items-center justify-center flex-shrink-0 border border-fuchsia-100">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+                                </div>
+                                <div class="min-w-0">
+                                    <h3 class="font-semibold text-slate-900 truncate" x-text="config.name"></h3>
+                                    <p class="text-slate-500 text-sm truncate" x-text="config.description || 'No description'"></p>
+                                    <div class="flex items-center gap-2 mt-2">
+                                        <span class="badge bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200" x-text="config.type"></span>
+                                        <span class="text-slate-400 text-xs" x-text="'Used ' + config.use_count + ' times'"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1 flex-shrink-0">
+                                <button @click="testConfig(config._id)" class="btn btn-ghost btn-icon-sm text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" title="Test connection">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="m9 12 2 2 4-4"/><path d="M12 3c-4.5 0-9 2-9 9 0 7 4.5 9 9 9s9-2 9-9c0-7-4.5-9-9-9Z"/></svg>
+                                </button>
+                                <button @click="editConfig(config)" class="btn btn-ghost btn-icon-sm hover:text-brand-600" title="Edit">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                                </button>
+                                <button @click="deleteConfig(config._id)" class="btn btn-ghost btn-icon-sm hover:text-red-600 hover:bg-red-50" title="Delete">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="destinations.length === 0" class="card p-10 text-center">
+                    <div class="w-12 h-12 rounded-full bg-slate-100 mx-auto flex items-center justify-center text-slate-400 mb-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+                    </div>
+                    <p class="text-slate-500 text-sm">No destinations configured yet</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Jobs Tab -->
+        <div x-show="activeTab === 'jobs'" x-cloak>
+            <div class="flex flex-wrap gap-3 justify-between items-center mb-5">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-900">Conversion Jobs</h2>
+                    <p class="text-sm text-slate-500">Schedule, run and monitor your conversion pipelines</p>
+                </div>
+                <div class="flex gap-2">
+                    <button @click="loadJobs()" class="btn btn-secondary" title="Refresh">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+                        Refresh
+                    </button>
+                    <button @click="showNewJobModal = true" class="btn btn-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="icon"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Add New Job
+                    </button>
+                </div>
+            </div>
+            <div class="grid gap-3">
+                <template x-for="job in jobs" :key="job._id">
+                    <div class="card p-4">
+                        <div class="flex justify-between items-start gap-4">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center flex-wrap gap-2">
+                                    <h3 class="font-semibold text-slate-900 truncate" x-text="job.name"></h3>
+                                    <span :class="{
+                                        'bg-amber-50 text-amber-700 border border-amber-200': job.status === 'pending',
+                                        'bg-sky-50 text-sky-700 border border-sky-200': job.status === 'running',
+                                        'bg-emerald-50 text-emerald-700 border border-emerald-200': job.status === 'completed',
+                                        'bg-red-50 text-red-700 border border-red-200': job.status === 'failed',
+                                        'bg-slate-100 text-slate-600 border border-slate-200': job.status === 'cancelled'
+                                    }" class="badge">
+                                        <span class="badge-dot" :class="{
+                                            'bg-amber-500': job.status === 'pending',
+                                            'bg-sky-500 animate-pulse': job.status === 'running',
+                                            'bg-emerald-500': job.status === 'completed',
+                                            'bg-red-500': job.status === 'failed',
+                                            'bg-slate-400': job.status === 'cancelled'
+                                        }"></span>
+                                        <span x-text="job.status"></span>
+                                    </span>
+                                    <span x-show="job.schedule_enabled && job.schedule_cron"
+                                          class="badge bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-sm"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                        <span class="font-mono normal-case" x-text="job.schedule_cron || ''"></span>
+                                    </span>
+                                </div>
+                                <p class="text-slate-500 text-sm mt-1" x-text="job.description || ''"></p>
+                                <div class="mt-2 flex items-center gap-2 text-sm text-slate-600">
+                                    <span class="font-mono text-xs px-1.5 py-0.5 bg-sky-50 text-sky-700 border border-sky-100 rounded" x-text="job.source.type"></span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon text-slate-400"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                                    <span class="font-mono text-xs px-1.5 py-0.5 bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-100 rounded" x-text="job.destination.type"></span>
+                                </div>
+                                <div x-show="job.stats" class="mt-3">
+                                    <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                        <div class="bg-gradient-to-r from-brand-500 to-brand-600 h-1.5 rounded-full transition-all"
+                                             :style="'width: ' + (job.stats.completion_percentage || 0) + '%'"></div>
+                                    </div>
+                                    <p class="text-xs text-slate-500 mt-1">
+                                        <span x-text="job.stats.completed_files"></span>/<span x-text="job.stats.total_files"></span> files
+                                        · <span x-text="job.stats.completion_percentage || 0"></span>%
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1 flex-shrink-0">
+                                <button x-show="job.status === 'pending' || job.status === 'failed'"
+                                        @click="runJob(job._id)"
+                                        class="btn btn-success" title="Run">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none" class="icon-sm"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+                                    Run
+                                </button>
+                                <button x-show="job.status !== 'running'"
+                                        @click="analyzeJob(job._id)"
+                                        class="btn btn-primary" title="Analyze">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M3 3v18h18"/><path d="m7 14 4-4 4 4 5-5"/></svg>
+                                    Analyze
+                                </button>
+                                <button @click="openHistoryModal(job._id, job.name)"
+                                        class="btn btn-ghost btn-icon-sm hover:text-indigo-600" title="History">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
+                                </button>
+                                <button x-show="job.status !== 'running'"
+                                        @click="openEditJobModal(job)"
+                                        class="btn btn-ghost btn-icon-sm hover:text-brand-600" title="Edit">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                                </button>
+                                <button x-show="job.status === 'running'"
+                                        @click="cancelJob(job._id)"
+                                        class="btn btn-ghost btn-icon-sm text-amber-600 hover:bg-amber-50" title="Cancel">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+                                </button>
+                                <button @click="deleteJob(job._id)"
+                                        class="btn btn-ghost btn-icon-sm hover:text-red-600 hover:bg-red-50" title="Delete">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="jobs.length === 0" class="card p-10 text-center">
+                    <div class="w-12 h-12 rounded-full bg-slate-100 mx-auto flex items-center justify-center text-slate-400 mb-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg"><path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="m16.24 16.24 2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="m16.24 7.76 2.83-2.83"/></svg>
+                    </div>
+                    <p class="text-slate-500 text-sm">No jobs created yet</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- New Job Modal -->
+        <div x-show="showNewJobModal" x-cloak
+             class="fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-4">
+            <div class="modal-panel max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-5">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            </div>
+                            <h2 class="text-lg font-bold text-slate-900">Create New Conversion Job</h2>
+                        </div>
+                        <button @click="showNewJobModal = false; resetNewJob()" class="btn btn-ghost btn-icon-sm" aria-label="Close">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                    <form @submit.prevent="createJob()">
+                    <div class="mb-4">
+                        <label class="label">Job Name *</label>
+                        <input type="text" x-model="newJob.name" required
+                               class="input"
+                               placeholder="My Conversion Job">
+                    </div>
+                    <div class="mb-4">
+                        <label class="label">Description</label>
+                        <textarea x-model="newJob.description"
+                                  class="textarea"
+                                  placeholder="Optional description"></textarea>
+                    </div>
+                    <div class="mb-4">
+                        <label class="label">Source Configuration *</label>
+                        <select x-model="newJob.source_config_id" required class="select">
+                            <option value="">Select a source...</option>
+                            <template x-for="src in sources" :key="src._id">
+                                <option :value="src._id" x-text="src.name + ' (' + src.type + ')'"></option>
+                            </template>
+                        </select>
+                        <p x-show="sources.length === 0" class="text-red-600 text-xs mt-1">
+                            No sources configured. <a href="#" @click="activeTab = 'sources'; showNewJobModal = false" class="underline font-medium">Add one first</a>.
+                        </p>
+                    </div>
+                    <div class="mb-4">
+                        <label class="label">Destination Configuration *</label>
+                        <select x-model="newJob.destination_config_id" required class="select">
+                            <option value="">Select a destination...</option>
+                            <template x-for="dest in destinations" :key="dest._id">
+                                <option :value="dest._id" x-text="dest.name + ' (' + dest.type + ')'"></option>
+                            </template>
+                        </select>
+                        <p x-show="destinations.length === 0" class="text-red-600 text-xs mt-1">
+                            No destinations configured. <a href="#" @click="activeTab = 'destinations'; showNewJobModal = false" class="underline font-medium">Add one first</a>.
+                        </p>
+                    </div>
+                    <div class="mb-4">
+                        <label class="label">File Extensions</label>
+                        <input type="text" x-model="newJob.extensionsStr"
+                               class="input"
+                               placeholder=".pdf, .docx, .pptx, .xlsx, .csv">
+                        <p class="label-hint">Comma-separated list of extensions to convert</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="label">Source Folder (optional)</label>
+                            <input type="text" x-model="newJob.source_folder"
+                                   class="input"
+                                   placeholder="/path/in/source">
+                        </div>
+                        <div>
+                            <label class="label">Destination Folder (optional)</label>
+                            <input type="text" x-model="newJob.destination_folder"
+                                   class="input"
+                                   placeholder="/path/in/destination">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="label">Conversion Strategy</label>
+                            <select x-model="newJob.conversion_strategy" class="select">
+                                <option value="fast">Fast &mdash; Faster conversion, best for simple documents</option>
+                                <option value="balanced">Balanced &mdash; More accurate, especially for PDFs and images</option>
+                                <option value="accurate">Accurate &mdash; Most accurate, uses LLM for complex formats (slower &amp; costlier)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="label">Batch Size</label>
+                            <input type="number" x-model.number="newJob.batch_size" min="1" max="20" class="input">
+                            <p class="label-hint">Number of files to process concurrently</p>
+                        </div>
+                    </div>
+
+                    <!-- Per-job LLM settings (only relevant for Accurate strategy) -->
+                    <div x-show="newJob.conversion_strategy === 'accurate'" class="border border-amber-200 bg-amber-50/50 rounded-xl p-4 mb-4">
+                        <div class="flex items-center gap-2 mb-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon text-amber-600"><path d="m12 2 2.39 7.36H22l-6.19 4.5L18.2 21 12 16.5 5.8 21l2.39-7.14L2 9.36h7.61Z"/></svg>
+                            <h3 class="font-semibold text-slate-800">LLM Settings <span class="text-xs font-normal text-slate-500">(Accurate strategy)</span></h3>
+                        </div>
+                        <p class="text-xs text-slate-500 mb-3">Leave fields empty to inherit from global Settings.</p>
+                        <div class="grid grid-cols-2 gap-4 mb-3">
+                            <div>
+                                <label class="label text-xs">Provider</label>
+                                <select x-model="newJob.llm_provider" class="select text-sm py-1.5">
+                                    <option value="">&mdash; global default &mdash;</option>
+                                    <option value="openai">OpenAI</option>
+                                    <option value="anthropic">Anthropic</option>
+                                    <option value="google">Google (Gemini)</option>
+                                    <option value="ollama">Ollama (local)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="label text-xs">Model</label>
+                                <input type="text" x-model="newJob.llm_model" class="input text-sm py-1.5" placeholder="e.g. gpt-4o (global default)">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="label text-xs">API Key</label>
+                            <input type="password" x-model="newJob.llm_api_key" class="input text-sm py-1.5" placeholder="Leave empty to use global API key">
+                        </div>
+                        <div class="mb-3">
+                            <label class="label text-xs">Base URL</label>
+                            <input type="text" x-model="newJob.llm_base_url" class="input text-sm py-1.5" placeholder="e.g. http://localhost:11434/v1 (Ollama)">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="label text-xs">Max PDF Pages</label>
+                                <input type="number" x-model.number="newJob.llm_max_pages" min="1" class="input text-sm py-1.5" placeholder="global default">
+                                <p class="label-hint">PDFs larger than this skip LLM</p>
+                            </div>
+                            <div>
+                                <label class="label text-xs">Complexity Threshold</label>
+                                <input type="number" x-model.number="newJob.pdf_complexity_threshold" min="0" max="1" step="0.01" class="input text-sm py-1.5" placeholder="global default">
+                                <p class="label-hint">0–1; below this uses Docling</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Schedule -->
+                    <div class="border border-indigo-200 bg-indigo-50/50 rounded-xl p-4 mb-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon text-indigo-600"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                <h3 class="font-semibold text-slate-800">Schedule <span class="text-xs font-normal text-slate-500">(optional)</span></h3>
+                            </div>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <span class="text-sm text-slate-600">Enabled</span>
+                                <input type="checkbox" x-model="newJob.schedule_enabled" class="rounded text-indigo-600 focus:ring-indigo-400">
+                            </label>
+                        </div>
+                        <div>
+                            <label class="label text-xs">Cron Expression</label>
+                            <input type="text" x-model="newJob.schedule_cron" class="input text-sm py-1.5 font-mono" placeholder="e.g. 0 2 * * * (daily at 2 AM)">
+                            <p class="label-hint">5-part cron: minute hour day month weekday</p>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-3 pt-2">
+                        <button type="submit" :disabled="!canCreateJob" class="btn btn-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                            Create Job
+                        </button>
+                        <button type="button" @click="createAndRunJob()" :disabled="!canCreateJob" class="btn btn-success">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none" class="icon-sm"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+                            Create &amp; Run
+                        </button>
+                        <button type="button" @click="showNewJobModal = false; resetNewJob()" class="btn btn-secondary ml-auto">
+                            Cancel
+                        </button>
+                    </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configuration Modal -->
+        <div x-show="showConfigModal" x-cloak
+             class="fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-4">
+            <div class="modal-panel max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-5">
+                        <h2 class="text-lg font-bold text-slate-900" x-text="editingConfig ? 'Edit Configuration' : (configModal.isSource ? 'Add Source' : 'Add Destination')"></h2>
+                        <button @click="closeConfigModal()" class="btn btn-ghost btn-icon-sm" aria-label="Close">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                    
+                    <form @submit.prevent="saveConfig()">
+                        <div class="mb-4">
+                            <label class="label">Name *</label>
+                            <input type="text" x-model="configModal.name" required class="input" placeholder="Configuration name">
+                        </div>
+                        <div class="mb-4">
+                            <label class="label">Description</label>
+                            <textarea x-model="configModal.description" class="textarea" placeholder="Optional description"></textarea>
+                        </div>
+                        <div class="mb-4" x-show="!editingConfig">
+                            <label class="label">Integration Type *</label>
+                            <select x-model="configModal.type" @change="loadSchemaFields()" required class="select">
+                                <option value="">Select type...</option>
+                                <template x-for="schema in schemas" :key="schema.type">
+                                    <option :value="schema.type" x-text="schema.name"></option>
+                                </template>
+                            </select>
+                        </div>
+                        
+                        <!-- Dynamic Fields -->
+                        <div x-show="configModal.type" class="space-y-4">
+                            <h3 class="font-semibold text-slate-800 border-t border-slate-200 pt-4">Configuration Fields</h3>
+                            <template x-for="field in currentSchemaFields" :key="field.name">
+                                <div>
+                                    <label class="label">
+                                        <span x-text="field.label"></span>
+                                        <span x-show="field.required" class="text-red-500">*</span>
+                                    </label>
+                                    <p x-show="field.description" class="label-hint -mt-1 mb-1" x-text="field.description"></p>
+                                    
+                                    <input x-show="field.field_type === 'text'" 
+                                           type="text" 
+                                           x-model="configModal.config[field.name]"
+                                           :required="field.required && field.field_type === 'text'"
+                                           :placeholder="field.placeholder || ''"
+                                           class="input">
+                                    
+                                    <input x-show="field.field_type === 'password'" 
+                                           type="password" 
+                                           x-model="configModal.config[field.name]"
+                                           :required="field.required && field.field_type === 'password'"
+                                           :placeholder="field.placeholder || ''"
+                                           class="input">
+                                    
+                                    <textarea x-show="field.field_type === 'textarea'"
+                                              x-model="configModal.config[field.name]"
+                                              :required="field.required && field.field_type === 'textarea'"
+                                              :placeholder="field.placeholder || ''"
+                                              rows="3"
+                                              class="textarea"></textarea>
+                                    
+                                    <select x-show="field.field_type === 'select'"
+                                            x-model="configModal.config[field.name]"
+                                            :required="field.required && field.field_type === 'select'"
+                                            class="select">
+                                        <option value="">Select...</option>
+                                        <template x-for="option in field.options" :key="option">
+                                            <option :value="option" x-text="option"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </template>
+                        </div>
+                        
+                        <div class="flex gap-3 mt-6">
+                            <button type="submit" class="btn btn-primary">
+                                <span x-text="editingConfig ? 'Update' : 'Save'"></span>
+                            </button>
+                            <button type="button" @click="closeConfigModal()" class="btn btn-secondary">
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Results Modal -->
+        <div x-show="showTestModal" x-cloak
+             class="fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-4">
+            <div class="modal-panel max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-bold text-slate-900">Connection Test Results</h2>
+                        <button @click="showTestModal = false" class="btn btn-ghost btn-icon-sm" aria-label="Close">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                    <div :class="testResult.success ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-red-50 text-red-800 border-red-200'"
+                         class="p-4 rounded-xl border mb-4 flex items-start gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg flex-shrink-0 mt-0.5" x-show="testResult.success"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg flex-shrink-0 mt-0.5" x-show="!testResult.success"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                        <div>
+                            <p class="font-semibold" x-text="testResult.success ? 'Success!' : 'Failed'"></p>
+                            <p class="text-sm" x-text="testResult.message"></p>
+                        </div>
+                    </div>
+                    <div x-show="testResult.sample_files && testResult.sample_files.length > 0">
+                        <h3 class="font-semibold text-slate-800 mb-2">Sample Files</h3>
+                        <div class="bg-slate-50 border border-slate-200 rounded-lg p-2 max-h-60 overflow-y-auto">
+                            <template x-for="file in testResult.sample_files" :key="file.path">
+                                <div class="text-sm py-1 px-2 border-b border-slate-200 last:border-0">
+                                    <span class="font-mono text-xs text-slate-700" x-text="file.path"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analysis Modal -->
+        <div x-show="showAnalysisModal" x-cloak
+             class="fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-4">
+            <div class="modal-panel max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-5">
+                        <h2 class="text-lg font-bold text-slate-900">Conversion Analysis</h2>
+                        <button @click="showAnalysisModal = false" class="btn btn-ghost btn-icon-sm" aria-label="Close">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                    
+                    <div class="grid grid-cols-3 gap-3 mb-6">
+                        <div class="bg-gradient-to-br from-sky-50 to-sky-100 border border-sky-200 p-4 rounded-xl text-center">
+                            <div class="text-3xl font-bold text-sky-700" x-text="analysisResult.total_source_files"></div>
+                            <div class="text-xs font-medium text-sky-700/80 uppercase tracking-wider mt-1">Source Files</div>
+                        </div>
+                        <div class="bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 p-4 rounded-xl text-center">
+                            <div class="text-3xl font-bold text-emerald-700" x-text="analysisResult.total_converted_files"></div>
+                            <div class="text-xs font-medium text-emerald-700/80 uppercase tracking-wider mt-1">Already Converted</div>
+                        </div>
+                        <div class="bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-200 p-4 rounded-xl text-center">
+                            <div class="text-3xl font-bold text-amber-700" x-text="analysisResult.files_to_convert?.length || 0"></div>
+                            <div class="text-xs font-medium text-amber-700/80 uppercase tracking-wider mt-1">To Convert</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <div class="flex justify-between text-sm mb-1.5">
+                            <span class="font-medium text-slate-700">Completion Progress</span>
+                            <span class="text-slate-600" x-text="analysisResult.completion_percentage + '%'"></span>
+                        </div>
+                        <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                            <div class="bg-gradient-to-r from-emerald-400 to-emerald-600 h-2.5 rounded-full transition-all" 
+                                 :style="'width: ' + analysisResult.completion_percentage + '%'"></div>
+                        </div>
+                    </div>
+                    
+                    <div x-show="analysisResult.files_to_convert?.length > 0" class="mb-4">
+                        <h3 class="font-semibold text-slate-800 mb-2">Files to Convert</h3>
+                        <div class="bg-slate-50 border border-slate-200 rounded-lg p-2 max-h-40 overflow-y-auto">
+                            <template x-for="file in analysisResult.files_to_convert?.slice(0, 20)" :key="file.path">
+                                <div class="text-sm py-1 px-2 border-b border-slate-200 last:border-0 font-mono text-xs text-slate-700" x-text="file.path"></div>
+                            </template>
+                            <div x-show="analysisResult.files_to_convert?.length > 20" class="text-sm text-slate-500 mt-2 px-2">
+                                ... and <span x-text="analysisResult.files_to_convert.length - 20"></span> more
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div x-show="analysisResult.files_to_convert?.length > 0" class="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-200">
+                        <button @click="showAnalysisModal = false" class="btn btn-secondary">
+                            Close
+                        </button>
+                        <button @click="runAnalyzedJob()" class="btn btn-success">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none" class="icon-sm"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+                            Run Conversion
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit Job Modal -->
+        <div x-show="showEditJobModal" x-cloak
+             class="fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-4">
+            <div class="modal-panel max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-5">
+                        <h2 class="text-lg font-bold text-slate-900">Edit Job</h2>
+                        <button @click="showEditJobModal = false" class="btn btn-ghost btn-icon-sm" aria-label="Close">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                    <form @submit.prevent="saveJobEdit()">
+                        <div class="mb-4">
+                            <label class="label">Job Name *</label>
+                            <input type="text" x-model="editJobForm.name" required class="input">
+                        </div>
+                        <div class="mb-4">
+                            <label class="label">Description</label>
+                            <textarea x-model="editJobForm.description" class="textarea"></textarea>
+                        </div>
+                        <div class="mb-4">
+                            <label class="label">Source Configuration *</label>
+                            <select x-model="editJobForm.source_config_id" required class="select">
+                                <option value="">Select a source...</option>
+                                <template x-for="src in sources" :key="src._id">
+                                    <option :value="src._id" x-text="src.name + ' (' + src.type + ')'"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div class="mb-4">
+                            <label class="label">Destination Configuration *</label>
+                            <select x-model="editJobForm.destination_config_id" required class="select">
+                                <option value="">Select a destination...</option>
+                                <template x-for="dest in destinations" :key="dest._id">
+                                    <option :value="dest._id" x-text="dest.name + ' (' + dest.type + ')'"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div class="mb-4">
+                            <label class="label">File Extensions</label>
+                            <input type="text" x-model="editJobForm.extensionsStr" class="input" placeholder=".pdf, .docx, .pptx, .xlsx, .csv">
+                            <p class="label-hint">Comma-separated list of extensions to convert</p>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="label">Source Folder (optional)</label>
+                                <input type="text" x-model="editJobForm.source_folder" class="input" placeholder="/path/in/source">
+                            </div>
+                            <div>
+                                <label class="label">Destination Folder (optional)</label>
+                                <input type="text" x-model="editJobForm.destination_folder" class="input" placeholder="/path/in/destination">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="label">Conversion Strategy</label>
+                                <select x-model="editJobForm.conversion_strategy" class="select">
+                                    <option value="fast">Fast &mdash; Faster conversion, best for simple documents</option>
+                                    <option value="balanced">Balanced &mdash; More accurate, especially for PDFs and images</option>
+                                    <option value="accurate">Accurate &mdash; Most accurate, uses LLM for complex formats (slower &amp; costlier)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="label">Batch Size</label>
+                                <input type="number" x-model.number="editJobForm.batch_size" min="1" max="20" class="input">
+                                <p class="label-hint">Number of files to process concurrently</p>
+                            </div>
+                        </div>
+
+                        <!-- Per-job LLM settings (only relevant for Accurate strategy) -->
+                        <div x-show="editJobForm.conversion_strategy === 'accurate'" class="border border-amber-200 bg-amber-50/50 rounded-xl p-4 mb-4">
+                            <div class="flex items-center gap-2 mb-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon text-amber-600"><path d="m12 2 2.39 7.36H22l-6.19 4.5L18.2 21 12 16.5 5.8 21l2.39-7.14L2 9.36h7.61Z"/></svg>
+                                <h3 class="font-semibold text-slate-800">LLM Settings <span class="text-xs font-normal text-slate-500">(Accurate strategy)</span></h3>
+                            </div>
+                            <p class="text-xs text-slate-500 mb-3">Leave fields empty to inherit from global Settings.</p>
+                            <div class="grid grid-cols-2 gap-4 mb-3">
+                                <div>
+                                    <label class="label text-xs">Provider</label>
+                                    <select x-model="editJobForm.llm_provider" class="select text-sm py-1.5">
+                                        <option value="">&mdash; global default &mdash;</option>
+                                        <option value="openai">OpenAI</option>
+                                        <option value="anthropic">Anthropic</option>
+                                        <option value="google">Google (Gemini)</option>
+                                        <option value="ollama">Ollama (local)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="label text-xs">Model</label>
+                                    <input type="text" x-model="editJobForm.llm_model" class="input text-sm py-1.5" placeholder="e.g. gpt-4o (global default)">
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="label text-xs">API Key</label>
+                                <input type="password" x-model="editJobForm.llm_api_key" class="input text-sm py-1.5"
+                                       :placeholder="editJobForm.llm_api_key_set ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022  (already set)' : 'Leave empty to use global API key'">
+                            </div>
+                            <div class="mb-3">
+                                <label class="label text-xs">Base URL</label>
+                                <input type="text" x-model="editJobForm.llm_base_url" class="input text-sm py-1.5" placeholder="e.g. http://localhost:11434/v1 (Ollama)">
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="label text-xs">Max PDF Pages</label>
+                                    <input type="number" x-model.number="editJobForm.llm_max_pages" min="1" class="input text-sm py-1.5" placeholder="global default">
+                                    <p class="label-hint">PDFs larger than this skip LLM</p>
+                                </div>
+                                <div>
+                                    <label class="label text-xs">Complexity Threshold</label>
+                                    <input type="number" x-model.number="editJobForm.pdf_complexity_threshold" min="0" max="1" step="0.01" class="input text-sm py-1.5" placeholder="global default">
+                                    <p class="label-hint">0–1; below this uses Docling</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Schedule -->
+                        <div class="border border-indigo-200 bg-indigo-50/50 rounded-xl p-4 mb-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon text-indigo-600"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                    <h3 class="font-semibold text-slate-800">Schedule <span class="text-xs font-normal text-slate-500">(optional)</span></h3>
+                                </div>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <span class="text-sm text-slate-600">Enabled</span>
+                                    <input type="checkbox" x-model="editJobForm.schedule_enabled" class="rounded text-indigo-600 focus:ring-indigo-400">
+                                </label>
+                            </div>
+                            <div>
+                                <label class="label text-xs">Cron Expression</label>
+                                <input type="text" x-model="editJobForm.schedule_cron" class="input text-sm py-1.5 font-mono" placeholder="e.g. 0 2 * * * (daily at 2 AM)">
+                                <p class="label-hint">5-part cron: minute hour day month weekday</p>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-3 mt-6">
+                            <button type="submit" class="btn btn-primary">
+                                Save Changes
+                            </button>
+                            <button type="button" @click="showEditJobModal = false" class="btn btn-secondary">
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Execution History Modal -->
+        <div x-show="showHistoryModal" x-cloak
+             class="fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-4">
+            <div class="modal-panel max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-5">
+                        <h2 class="text-lg font-bold text-slate-900">Execution History — <span class="text-brand-600" x-text="historyJobName"></span></h2>
+                        <button @click="showHistoryModal = false" class="btn btn-ghost btn-icon-sm" aria-label="Close">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                    <div x-show="historyRecords.length === 0" class="text-slate-500 text-center py-10">
+                        No execution history yet
+                    </div>
+                    <div x-show="historyRecords.length > 0" class="border border-slate-200 rounded-xl overflow-hidden">
+                        <table class="w-full text-sm">
+                            <thead class="bg-slate-50">
+                                <tr class="text-left text-slate-600 text-xs uppercase tracking-wider">
+                                    <th class="py-2.5 px-3 font-semibold">Started</th>
+                                    <th class="py-2.5 px-3 font-semibold">Trigger</th>
+                                    <th class="py-2.5 px-3 font-semibold">Status</th>
+                                    <th class="py-2.5 px-3 font-semibold">Files</th>
+                                    <th class="py-2.5 px-3 font-semibold">Duration</th>
+                                    <th class="py-2.5 px-3 font-semibold">Error</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="rec in historyRecords" :key="rec._id">
+                                    <tr class="border-t border-slate-200 hover:bg-slate-50">
+                                        <td class="py-2 px-3 whitespace-nowrap text-slate-700" x-text="rec.started_at ? new Date(rec.started_at).toLocaleString() : '-'"></td>
+                                        <td class="py-2 px-3">
+                                            <span :class="rec.trigger === 'scheduled' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-slate-100 text-slate-600 border border-slate-200'"
+                                                  class="badge" x-text="rec.trigger"></span>
+                                        </td>
+                                        <td class="py-2 px-3">
+                                            <span :class="{
+                                                'text-emerald-700 font-medium': rec.status === 'completed',
+                                                'text-red-700 font-medium': rec.status === 'failed',
+                                                'text-sky-700 font-medium': rec.status === 'running',
+                                                'text-amber-700 font-medium': rec.status === 'pending',
+                                                'text-slate-500': rec.status === 'cancelled'
+                                            }" x-text="rec.status"></span>
+                                        </td>
+                                        <td class="py-2 px-3 text-slate-700" x-text="rec.completed_files + '/' + rec.total_files + (rec.failed_files ? ' (' + rec.failed_files + ' failed)' : '')"></td>
+                                        <td class="py-2 px-3 whitespace-nowrap text-slate-700" x-text="rec.completed_at && rec.started_at ? formatDuration(rec.started_at, rec.completed_at) : '-'"></td>
+                                        <td class="py-2 px-3 text-red-600 text-xs max-w-xs truncate" x-text="rec.error_message || ''"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div x-show="loading" x-cloak
+             class="fixed inset-0 modal-backdrop flex items-center justify-center z-50">
+            <div class="bg-white px-8 py-6 rounded-2xl shadow-pop flex flex-col items-center">
+                <div class="spinner"></div>
+                <p class="mt-4 text-sm font-medium text-slate-600">Loading...</p>
+            </div>
+        </div>
+        </main>
+    </div>
+
+    <script>
+    <!-- APP_JS -->
+    </script>
+</body>
+</html>
