@@ -18,13 +18,13 @@ def _read_requirements():
 
 setup(
     name="ws_mark_flow",
-    version="0.0.2",
+    version="0.0.3",
     description="Convert files from various sources (SharePoint, S3, Azure Blob, etc.) to Markdown and upload to destinations (Google Drive, SharePoint, etc.).",
     long_description=(_here / "README.md").read_text(encoding="utf-8"),
     long_description_content_type="text/markdown",
     author="Websolute Spa",
     author_email="dev@websolute.it",
-    url="https://github.com/massimodipaolo/ws-mark-flow",
+    url="https://github.com/websolutespa/ws-mark-flow",
     package_dir={"ws_mark_flow": "src"},
     packages=[
         "ws_mark_flow",

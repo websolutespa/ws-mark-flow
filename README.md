@@ -151,7 +151,7 @@ prospector ./src -t pyroma
 
 - [pypi](https://pypi.org/project/ws-mark-flow/)
 
-  ```pwsh
+  ```bash
   twine upload --verbose dist/* 
 
   ```
@@ -166,9 +166,9 @@ docker build -t ws-mark-flow ./app
 cp .env.example ./app/.env
 # Edit .env 
 
-docker run -p 8000:8000 --env-file ./app/.env ws-mark-flow
+docker run -p 80:80 --env-file ./app/.env ws-mark-flow
 # use host.docker.internal for MongoDB connection from container to host
-docker run --add-host=host.docker.internal:host-gateway -p 8000:8000 --env-file ./app/.env ws-mark-flow
+docker run --add-host=host.docker.internal:host-gateway -p 80:80 --env-file ./app/.env ws-mark-flow
 ```
 
 ## License
