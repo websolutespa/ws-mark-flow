@@ -8,7 +8,7 @@
             "name": "app:watch",
             "type": "node-terminal",
             "request": "launch",
-            "command": "source .venv/bin/activate && uvicorn src.app:app --reload --host 0.0.0.0 --port 8000",
+            "command": "source .venv/bin/activate && uvicorn src.main:app --reload --host 0.0.0.0 --port 8000",
             "cwd": "${cwd}"
         },        
         {
@@ -17,7 +17,7 @@
             "request": "launch",
             "module": "uvicorn",
             "args": [
-                "src.app:app",
+                "src.main:app",
                 "--reload",
                 "--host",
                 "0.0.0.0",

@@ -16,7 +16,7 @@ markitdown[all]==0.1.5
 docling==2.91.0
 torch==2.11.0
 torchvision==0.26.0
-pymupdf==1.27.2.2
+pymupdf==1.27.2.3
 
 # LLM providers (for ACCURATE strategy)
 openai==2.32.0
@@ -25,7 +25,7 @@ google-genai==1.73.1
 
 # google drive auth (for service account)
 PyJWT==2.12.1
-cryptography==46.0.7
+cryptography==47.0.0
 
 # sftp
 paramiko==4.0.0

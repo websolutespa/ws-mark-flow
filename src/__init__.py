@@ -1,5 +1,4 @@
 """Ws-Mark-Flow AI Converter package."""
-from .app import app
 from .converter import ConversionService
 from .storage import JobStorage, ConfigurationStorage
 from .factory import create_source, create_destination
@@ -12,7 +11,6 @@ from .models import (
 )
 
 __all__ = [
-    "app",
     "ConversionService",
     "JobStorage",
     "ConfigurationStorage",
