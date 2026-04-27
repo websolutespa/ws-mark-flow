@@ -24,9 +24,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 # 2) Python deps — pinned version => cache hit until version bumps.
 #    BuildKit cache mount keeps wheels across builds even when the layer is invalidated.
-ARG WS_MARK_FLOW_VERSION=0.0.0
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    pip install "ws-mark-flow==${WS_MARK_FLOW_VERSION}"
+    pip install ws-mark-flow==0.0.5
 
 # 3) Model download — cached as long as the docling/ws-mark-flow versions don't change
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
