@@ -18,7 +18,7 @@ def _read_requirements():
 
 setup(
     name="ws_mark_flow",
-    version="0.0.6",
+    version="0.0.7",
     description="Convert files from various sources (SharePoint, S3, Azure Blob, etc.) to Markdown and upload to destinations (Google Drive, SharePoint, etc.).",
     long_description=(_here / "README.md").read_text(encoding="utf-8"),
     long_description_content_type="text/markdown",
@@ -26,10 +26,11 @@ setup(
     author_email="dev@websolute.it",
     url="https://github.com/websolutespa/ws-mark-flow",
     package_dir={"ws_mark_flow": "src"},
-    packages=[
-        "ws_mark_flow",
-        "ws_mark_flow.integration",
-    ],
+    # Auto-discover all subpackages under src/ so new ones (e.g. vectorstore)
+    # don't need manual wiring. Top-level package is mapped above.
+    packages=["ws_mark_flow", *(
+        f"ws_mark_flow.{p}" for p in find_packages(where="src")
+    )],
     include_package_data=True,
     install_requires=_read_requirements(),
     license="MIT",
