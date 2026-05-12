@@ -92,7 +92,13 @@
                         :class="activeTab === 'jobs' ? 'tab-active' : ''"
                         class="tab-btn">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="m16.24 16.24 2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="m16.24 7.76 2.83-2.83"/></svg>
-                    Jobs
+                    Conversion
+                </button>
+                <button @click="activeTab = 'ingestion'"
+                        :class="activeTab === 'ingestion' ? 'tab-active' : ''"
+                        class="tab-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M21 11V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6"/><circle cx="17" cy="17" r="4"/><path d="m21 21-1.5-1.5"/><path d="M7 7h10"/><path d="M7 11h6"/><path d="M7 15h4"/></svg>
+                    Ingestion
                 </button>
             </nav>
         </div>
@@ -898,6 +904,554 @@
                                 </template>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ingestion Tab -->
+        <div x-show="activeTab === 'ingestion'" x-cloak>
+            <div class="flex flex-wrap gap-3 justify-between items-center mb-5">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-900">Ingestion (Vectorization) Jobs</h2>
+                    <p class="text-sm text-slate-500">Chunk &amp; embed Markdown into a vector database</p>
+                </div>
+                <div class="flex gap-2">
+                    <button @click="loadIngestionJobs()" class="btn btn-secondary" title="Refresh">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+                        Refresh
+                    </button>
+                    <button @click="openNewIngestionJobModal()" class="btn btn-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="icon"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Add Ingestion Job
+                    </button>
+                </div>
+            </div>
+            <div class="grid gap-3">
+                <template x-for="job in ingestionJobs" :key="job._id">
+                    <div class="card p-4">
+                        <div class="flex justify-between items-start gap-4">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center flex-wrap gap-2">
+                                    <h3 class="font-semibold text-slate-900 truncate" x-text="job.name"></h3>
+                                    <span :class="{
+                                        'bg-amber-50 text-amber-700 border border-amber-200': job.status === 'pending',
+                                        'bg-sky-50 text-sky-700 border border-sky-200': job.status === 'running',
+                                        'bg-emerald-50 text-emerald-700 border border-emerald-200': job.status === 'completed',
+                                        'bg-red-50 text-red-700 border border-red-200': job.status === 'failed',
+                                        'bg-slate-100 text-slate-600 border border-slate-200': job.status === 'cancelled'
+                                    }" class="badge">
+                                        <span class="badge-dot" :class="{
+                                            'bg-amber-500': job.status === 'pending',
+                                            'bg-sky-500 animate-pulse': job.status === 'running',
+                                            'bg-emerald-500': job.status === 'completed',
+                                            'bg-red-500': job.status === 'failed',
+                                            'bg-slate-400': job.status === 'cancelled'
+                                        }"></span>
+                                        <span x-text="job.status"></span>
+                                    </span>
+                                    <span x-show="job.schedule_enabled && job.schedule_cron"
+                                          class="badge bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-sm"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                        <span class="font-mono normal-case" x-text="job.schedule_cron || ''"></span>
+                                    </span>
+                                </div>
+                                <p class="text-slate-500 text-sm mt-1" x-text="job.description || ''"></p>
+                                <div class="mt-2 flex items-center flex-wrap gap-2 text-sm text-slate-600">
+                                    <span class="font-mono text-xs px-1.5 py-0.5 bg-sky-50 text-sky-700 border border-sky-100 rounded" x-text="job.source.type"></span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon text-slate-400"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                                    <span class="font-mono text-xs px-1.5 py-0.5 bg-violet-50 text-violet-700 border border-violet-100 rounded"
+                                          x-text="job.vector_store.type + ' : ' + job.vector_store.namespace"></span>
+                                    <span class="font-mono text-xs px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-100 rounded"
+                                          x-text="(job.embedding && job.embedding.model) || '?'"
+                                          title="Embedding model"></span>
+                                </div>
+                                <div x-show="job.stats" class="mt-3">
+                                    <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                        <div class="bg-gradient-to-r from-violet-500 to-violet-600 h-1.5 rounded-full transition-all"
+                                             :style="'width: ' + (job.stats.completion_percentage || 0) + '%'"></div>
+                                    </div>
+                                    <p class="text-xs text-slate-500 mt-1">
+                                        <span x-text="job.stats.completed_documents"></span>/<span x-text="job.stats.total_documents"></span> docs
+                                        · <span x-text="job.stats.total_chunks"></span> chunks
+                                        <template x-if="job.stats.total_entities > 0 || job.stats.total_relations > 0">
+                                            <span> · <span x-text="job.stats.total_entities || 0"></span> entities · <span x-text="job.stats.total_relations || 0"></span> relations</span>
+                                        </template>
+                                        · <span x-text="job.stats.completion_percentage || 0"></span>%
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1 flex-shrink-0">
+                                <button x-show="job.status === 'pending' || job.status === 'failed' || job.status === 'completed' || job.status === 'cancelled'"
+                                        @click="runIngestionJob(job._id)"
+                                        class="btn btn-success" title="Run">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none" class="icon-sm"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+                                    Run
+                                </button>
+                                <button x-show="job.status !== 'running'"
+                                        @click="analyzeIngestionJob(job._id)"
+                                        class="btn btn-primary" title="Analyze">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M3 3v18h18"/><path d="m7 14 4-4 4 4 5-5"/></svg>
+                                    Analyze
+                                </button>
+                                <button @click="openQueryModal(job)"
+                                        class="btn btn-ghost btn-icon-sm hover:text-violet-600" title="Test query">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                </button>
+                                <button x-show="job.status !== 'running'"
+                                        @click="openEditIngestionJobModal(job)"
+                                        class="btn btn-ghost btn-icon-sm hover:text-brand-600" title="Edit">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                                </button>
+                                <button x-show="job.status === 'running'"
+                                        @click="cancelIngestionJob(job._id)"
+                                        class="btn btn-ghost btn-icon-sm text-amber-600 hover:bg-amber-50" title="Cancel">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+                                </button>
+                                <button @click="deleteIngestionJob(job._id)"
+                                        class="btn btn-ghost btn-icon-sm hover:text-red-600 hover:bg-red-50" title="Delete">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="ingestionJobs.length === 0" class="card p-10 text-center">
+                    <div class="w-12 h-12 rounded-full bg-slate-100 mx-auto flex items-center justify-center text-slate-400 mb-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg"><path d="M21 11V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6"/><circle cx="17" cy="17" r="4"/><path d="m21 21-1.5-1.5"/></svg>
+                    </div>
+                    <p class="text-slate-500 text-sm">No ingestion jobs yet</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- New / Edit Ingestion Job Modal (shared form) -->
+        <div x-show="showIngestionJobModal" x-cloak
+             class="fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-4">
+            <div class="modal-panel max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-5">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 2"/></svg>
+                            </div>
+                            <h2 class="text-lg font-bold text-slate-900" x-text="editingIngestionJob ? 'Edit Ingestion Job' : 'Create Ingestion Job'"></h2>
+                        </div>
+                        <button @click="closeIngestionJobModal()" class="btn btn-ghost btn-icon-sm" aria-label="Close">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                    <form @submit.prevent="saveIngestionJob()">
+                    <div class="mb-4">
+                        <label class="label">Job Name *</label>
+                        <input type="text" x-model="ingestionForm.name" required class="input" placeholder="My Ingestion Job">
+                    </div>
+                    <div class="mb-4">
+                        <label class="label">Description</label>
+                        <textarea x-model="ingestionForm.description" class="textarea" placeholder="Optional description"></textarea>
+                    </div>
+
+                    <!-- Markdown source -->
+                    <div class="border border-sky-200 bg-sky-50/40 rounded-xl p-4 mb-4">
+                        <h3 class="font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon text-sky-600"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+                            Markdown Source
+                        </h3>
+                        <div class="mb-3">
+                            <label class="label">Saved Configuration *</label>
+                            <select x-model="ingestionForm.source_config_id" required class="select">
+                                <option value="">Select a saved source or destination...</option>
+                                <optgroup label="Sources">
+                                    <template x-for="src in sources" :key="'src-' + src._id">
+                                        <option :value="'src:' + src._id" x-text="src.name + ' (' + src.type + ')'"></option>
+                                    </template>
+                                </optgroup>
+                                <optgroup label="Destinations (typically markdown)">
+                                    <template x-for="dest in destinations" :key="'dest-' + dest._id">
+                                        <option :value="'dest:' + dest._id" x-text="dest.name + ' (' + dest.type + ')'"></option>
+                                    </template>
+                                </optgroup>
+                            </select>
+                            <p class="label-hint">Pick any saved configuration that holds Markdown files</p>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="label">Source Folder (optional)</label>
+                                <input type="text" x-model="ingestionForm.source_folder" class="input" placeholder="/path/in/source">
+                            </div>
+                            <div>
+                                <label class="label">Extensions</label>
+                                <input type="text" x-model="ingestionForm.extensionsStr" class="input" placeholder=".md">
+                                <p class="label-hint">Comma-separated</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vector store -->
+                    <div class="border border-violet-200 bg-violet-50/40 rounded-xl p-4 mb-4">
+                        <h3 class="font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon text-violet-600"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+                            Vector Store
+                        </h3>
+                        <div class="grid grid-cols-2 gap-4 mb-3">
+                            <div>
+                                <label class="label">Backend *</label>
+                                <select x-model="ingestionForm.vector_store_type" @change="onVectorStoreTypeChange()" required class="select">
+                                    <option value="">Select backend...</option>
+                                    <template x-for="vt in vectorStoreSupported" :key="vt">
+                                        <option :value="vt" x-text="(vectorStoreSchemas[vt] && vectorStoreSchemas[vt].name) || vt"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="label">Namespace / Collection *</label>
+                                <input type="text" x-model="ingestionForm.namespace" required class="input" placeholder="default">
+                            </div>
+                        </div>
+                        <div x-show="currentVectorStoreFields.length > 0" class="space-y-3">
+                            <template x-for="field in currentVectorStoreFields" :key="'vs-' + field.name">
+                                <div>
+                                    <label class="label text-xs">
+                                        <span x-text="field.label"></span>
+                                        <span x-show="field.required" class="text-red-500">*</span>
+                                    </label>
+                                    <p x-show="field.description" class="label-hint -mt-1 mb-1" x-text="field.description"></p>
+                                    <input x-show="field.field_type === 'text' || !field.field_type"
+                                           type="text"
+                                           x-model="ingestionForm.vector_store_config[field.name]"
+                                           :required="field.required"
+                                           :placeholder="field.placeholder || ''"
+                                           class="input text-sm py-1.5">
+                                    <input x-show="field.field_type === 'password'"
+                                           type="password"
+                                           x-model="ingestionForm.vector_store_config[field.name]"
+                                           :required="field.required"
+                                           :placeholder="field.placeholder || ''"
+                                           class="input text-sm py-1.5">
+                                    <textarea x-show="field.field_type === 'textarea'"
+                                              x-model="ingestionForm.vector_store_config[field.name]"
+                                              :required="field.required"
+                                              :placeholder="field.placeholder || ''"
+                                              rows="3"
+                                              class="textarea text-sm"></textarea>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Embedding -->
+                    <div class="border border-amber-200 bg-amber-50/40 rounded-xl p-4 mb-4">
+                        <h3 class="font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon text-amber-600"><path d="m12 2 2.39 7.36H22l-6.19 4.5L18.2 21 12 16.5 5.8 21l2.39-7.14L2 9.36h7.61Z"/></svg>
+                            Embedding
+                        </h3>
+                        <div class="grid grid-cols-2 gap-4 mb-3">
+                            <div>
+                                <label class="label">Provider *</label>
+                                <select x-model="ingestionForm.embedding_provider" required class="select">
+                                    <option value="openai">OpenAI</option>
+                                    <option value="ollama">Ollama (local, OpenAI-compatible)</option>
+                                    <option value="google">Google (Gemini)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="label">Model *</label>
+                                <input type="text" x-model="ingestionForm.embedding_model" required class="input"
+                                       placeholder="text-embedding-3-small">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="label text-xs">API Key</label>
+                            <input type="password" x-model="ingestionForm.embedding_api_key" class="input text-sm py-1.5"
+                                   :placeholder="ingestionForm.embedding_api_key_set ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 (already set)' : 'Leave empty to use global LLM key'">
+                        </div>
+                        <div>
+                            <label class="label text-xs">Base URL</label>
+                            <input type="text" x-model="ingestionForm.embedding_base_url" class="input text-sm py-1.5"
+                                   placeholder="e.g. http://localhost:11434/v1 (Ollama)">
+                        </div>
+                    </div>
+
+                    <!-- Chunking -->
+                    <div class="border border-emerald-200 bg-emerald-50/40 rounded-xl p-4 mb-4">
+                        <h3 class="font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon text-emerald-600"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                            Chunking
+                        </h3>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <label class="label">Strategy</label>
+                                <select x-model="ingestionForm.chunk_strategy" class="select">
+                                    <option value="markdown_headers">Markdown Headers</option>
+                                    <option value="recursive">Recursive</option>
+                                    <option value="fixed">Fixed Window</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="label">Chunk Size</label>
+                                <input type="number" x-model.number="ingestionForm.chunk_size" min="100" max="32000" class="input">
+                                <p class="label-hint">Characters</p>
+                            </div>
+                            <div>
+                                <label class="label">Overlap</label>
+                                <input type="number" x-model.number="ingestionForm.chunk_overlap" min="0" max="2000" class="input">
+                                <p class="label-hint">Characters</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Execution -->
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="label">Batch Size</label>
+                            <input type="number" x-model.number="ingestionForm.batch_size" min="1" max="32" class="input">
+                            <p class="label-hint">Documents processed concurrently</p>
+                        </div>
+                        <div class="flex items-end">
+                            <label class="flex items-center gap-2 cursor-pointer pb-2">
+                                <input type="checkbox" x-model="ingestionForm.delete_orphans" class="rounded text-violet-600 focus:ring-violet-400">
+                                <span class="text-sm text-slate-700">Delete orphans</span>
+                                <span class="text-xs text-slate-500">(remove vectors of docs missing from source)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Graph Extraction -->
+                    <div class="border border-emerald-200 bg-emerald-50/40 rounded-xl p-4 mb-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon text-emerald-600"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><line x1="8.5" y1="7.5" x2="15.5" y2="7.5"/><line x1="7.5" y1="8.5" x2="11" y2="15.5"/><line x1="16.5" y1="8.5" x2="13" y2="15.5"/></svg>
+                                <h3 class="font-semibold text-slate-800">Graph Extraction <span class="text-xs font-normal text-slate-500">(graph-capable stores only — currently Neo4j)</span></h3>
+                            </div>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <span class="text-sm text-slate-600">Enabled</span>
+                                <input type="checkbox" x-model="ingestionForm.graph_enabled" class="rounded text-emerald-600 focus:ring-emerald-400">
+                            </label>
+                        </div>
+                        <template x-if="ingestionForm.graph_enabled">
+                            <div class="space-y-3">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="label text-xs">Mode</label>
+                                        <select x-model="ingestionForm.graph_mode" class="input text-sm py-1.5">
+                                            <option value="lexical">lexical (NER, no relations)</option>
+                                            <option value="schema_guided">schema_guided (ontology-constrained)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="label text-xs">LLM Model <span class="text-slate-400">(blank = default)</span></label>
+                                        <input type="text" x-model="ingestionForm.graph_llm_model" class="input text-sm py-1.5" placeholder="e.g. gpt-5.4 / claude-4">
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-3 gap-3">
+                                    <div>
+                                        <label class="label text-xs">LLM Provider</label>
+                                        <select x-model="ingestionForm.graph_llm_provider" class="input text-sm py-1.5">
+                                            <option value="">(default)</option>
+                                            <option value="openai">openai</option>
+                                            <option value="anthropic">anthropic</option>
+                                            <option value="google">google</option>
+                                            <option value="ollama">ollama</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="label text-xs">Max entities / chunk</label>
+                                        <input type="number" x-model.number="ingestionForm.graph_max_entities" min="1" max="100" class="input text-sm py-1.5">
+                                    </div>
+                                    <div>
+                                        <label class="label text-xs">Max relations / chunk</label>
+                                        <input type="number" x-model.number="ingestionForm.graph_max_relations" min="0" max="100" class="input text-sm py-1.5">
+                                    </div>
+                                </div>
+                                <template x-if="ingestionForm.graph_mode === 'schema_guided'">
+                                    <div>
+                                        <label class="label text-xs">Ontology (YAML or JSON)</label>
+                                        <textarea x-model="ingestionForm.graph_ontology_source" rows="6" class="input text-sm py-1.5 font-mono" placeholder='node_labels: [Person, Organization, Product]
+relations:
+  - {type: WORKS_AT, source: [Person], target: [Organization]}
+  - {type: PRODUCES, source: [Organization], target: [Product]}'></textarea>
+                                        <p class="label-hint">Defines allowed node labels and relation types. The LLM is constrained to this schema.</p>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Schedule -->
+                    <div class="border border-indigo-200 bg-indigo-50/50 rounded-xl p-4 mb-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon text-indigo-600"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                <h3 class="font-semibold text-slate-800">Schedule <span class="text-xs font-normal text-slate-500">(optional)</span></h3>
+                            </div>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <span class="text-sm text-slate-600">Enabled</span>
+                                <input type="checkbox" x-model="ingestionForm.schedule_enabled" class="rounded text-indigo-600 focus:ring-indigo-400">
+                            </label>
+                        </div>
+                        <div>
+                            <label class="label text-xs">Cron Expression</label>
+                            <input type="text" x-model="ingestionForm.schedule_cron" class="input text-sm py-1.5 font-mono" placeholder="e.g. 0 3 * * * (daily at 3 AM)">
+                            <p class="label-hint">5-part cron — note: scheduling for ingestion jobs is not yet wired into APScheduler</p>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-3 pt-2">
+                        <button type="submit" class="btn btn-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                            <span x-text="editingIngestionJob ? 'Save Changes' : 'Create Job'"></span>
+                        </button>
+                        <button x-show="!editingIngestionJob"
+                                type="button" @click="saveIngestionJob(true)"
+                                class="btn btn-success">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none" class="icon-sm"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+                            Create &amp; Run
+                        </button>
+                        <button type="button" @click="closeIngestionJobModal()" class="btn btn-secondary ml-auto">
+                            Cancel
+                        </button>
+                    </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ingestion Analysis Modal -->
+        <div x-show="showIngestionAnalysisModal" x-cloak
+             class="fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-4">
+            <div class="modal-panel max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-5">
+                        <h2 class="text-lg font-bold text-slate-900">Ingestion Analysis</h2>
+                        <button @click="showIngestionAnalysisModal = false" class="btn btn-ghost btn-icon-sm" aria-label="Close">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-4 gap-3 mb-6">
+                        <div class="bg-gradient-to-br from-sky-50 to-sky-100 border border-sky-200 p-4 rounded-xl text-center">
+                            <div class="text-2xl font-bold text-sky-700" x-text="ingestionAnalysisResult.source_documents || 0"></div>
+                            <div class="text-xs font-medium text-sky-700/80 uppercase tracking-wider mt-1">Source Docs</div>
+                        </div>
+                        <div class="bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 p-4 rounded-xl text-center">
+                            <div class="text-2xl font-bold text-emerald-700" x-text="ingestionAnalysisResult.up_to_date?.length || 0"></div>
+                            <div class="text-xs font-medium text-emerald-700/80 uppercase tracking-wider mt-1">Up&nbsp;to&nbsp;date</div>
+                        </div>
+                        <div class="bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-200 p-4 rounded-xl text-center">
+                            <div class="text-2xl font-bold text-amber-700" x-text="ingestionAnalysisResult.to_ingest?.length || 0"></div>
+                            <div class="text-xs font-medium text-amber-700/80 uppercase tracking-wider mt-1">To Ingest</div>
+                        </div>
+                        <div class="bg-gradient-to-br from-red-50 to-red-100 border border-red-200 p-4 rounded-xl text-center">
+                            <div class="text-2xl font-bold text-red-700" x-text="ingestionAnalysisResult.orphans?.length || 0"></div>
+                            <div class="text-xs font-medium text-red-700/80 uppercase tracking-wider mt-1">Orphans</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="flex justify-between text-sm mb-1.5">
+                            <span class="font-medium text-slate-700">Index Coverage</span>
+                            <span class="text-slate-600" x-text="(ingestionAnalysisResult.completion_percentage ?? 0) + '%'"></span>
+                        </div>
+                        <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                            <div class="bg-gradient-to-r from-violet-400 to-violet-600 h-2.5 rounded-full transition-all"
+                                 :style="'width: ' + (ingestionAnalysisResult.completion_percentage || 0) + '%'"></div>
+                        </div>
+                    </div>
+
+                    <div x-show="ingestionAnalysisResult.to_ingest?.length > 0" class="mb-4">
+                        <h3 class="font-semibold text-slate-800 mb-2">Documents to Ingest</h3>
+                        <div class="bg-slate-50 border border-slate-200 rounded-lg p-2 max-h-40 overflow-y-auto">
+                            <template x-for="file in ingestionAnalysisResult.to_ingest?.slice(0, 30)" :key="file.doc_id">
+                                <div class="text-sm py-1 px-2 border-b border-slate-200 last:border-0 font-mono text-xs text-slate-700" x-text="file.path"></div>
+                            </template>
+                            <div x-show="ingestionAnalysisResult.to_ingest?.length > 30" class="text-sm text-slate-500 mt-2 px-2">
+                                ... and <span x-text="ingestionAnalysisResult.to_ingest.length - 30"></span> more
+                            </div>
+                        </div>
+                    </div>
+
+                    <div x-show="ingestionAnalysisResult.orphans?.length > 0" class="mb-4">
+                        <h3 class="font-semibold text-slate-800 mb-2">Orphans <span class="text-xs font-normal text-slate-500">(indexed but missing from source)</span></h3>
+                        <div class="bg-red-50/50 border border-red-200 rounded-lg p-2 max-h-32 overflow-y-auto">
+                            <template x-for="orphan in ingestionAnalysisResult.orphans?.slice(0, 20)" :key="orphan.doc_id">
+                                <div class="text-sm py-1 px-2 border-b border-red-100 last:border-0 font-mono text-xs text-slate-700">
+                                    <span x-text="orphan.doc_id"></span>
+                                    <span class="text-slate-400" x-text="' (' + orphan.chunk_count + ' chunks)'"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-200">
+                        <button @click="showIngestionAnalysisModal = false" class="btn btn-secondary">
+                            Close
+                        </button>
+                        <button x-show="ingestionAnalysisResult.to_ingest?.length > 0"
+                                @click="runAnalyzedIngestionJob()" class="btn btn-success">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="none" class="icon-sm"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+                            Run Ingestion
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Vector Query Modal -->
+        <div x-show="showQueryModal" x-cloak
+             class="fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-4">
+            <div class="modal-panel max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-5">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            </div>
+                            <h2 class="text-lg font-bold text-slate-900">Test Vector Search — <span class="text-violet-600" x-text="queryJobName"></span></h2>
+                        </div>
+                        <button @click="showQueryModal = false" class="btn btn-ghost btn-icon-sm" aria-label="Close">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-lg"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                    <form @submit.prevent="runVectorQuery()">
+                        <div class="grid grid-cols-3 gap-4 mb-4">
+                            <div class="col-span-2">
+                                <label class="label">Query *</label>
+                                <input type="text" x-model="queryForm.query" required class="input" placeholder="What does the document say about ...?">
+                            </div>
+                            <div>
+                                <label class="label">Top K</label>
+                                <input type="number" x-model.number="queryForm.k" min="1" max="50" class="input">
+                            </div>
+                        </div>
+                        <div class="flex gap-3">
+                            <button type="submit" class="btn btn-primary">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                Search
+                            </button>
+                        </div>
+                    </form>
+
+                    <div x-show="queryResults.length > 0" class="mt-6">
+                        <h3 class="font-semibold text-slate-800 mb-2">Results <span class="text-xs font-normal text-slate-500">(lower score = closer)</span></h3>
+                        <div class="space-y-2 max-h-[50vh] overflow-y-auto">
+                            <template x-for="(hit, idx) in queryResults" :key="hit.chunk_id">
+                                <div class="border border-slate-200 rounded-lg p-3 bg-white">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <div class="flex items-center gap-2">
+                                            <span class="badge bg-violet-50 text-violet-700 border border-violet-200" x-text="'#' + (idx + 1)"></span>
+                                            <span class="font-mono text-xs text-slate-600" x-text="hit.doc_id"></span>
+                                            <span x-show="hit.metadata && hit.metadata.headings"
+                                                  class="text-xs text-slate-500 truncate" x-text="hit.metadata.headings"></span>
+                                        </div>
+                                        <span class="font-mono text-xs px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded" x-text="hit.score?.toFixed(4)"></span>
+                                    </div>
+                                    <pre class="whitespace-pre-wrap text-sm text-slate-700 font-sans" x-text="hit.text"></pre>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    <div x-show="queryRanOnce && queryResults.length === 0" class="mt-6 text-center text-slate-500 text-sm py-6">
+                        No results.
                     </div>
                 </div>
             </div>

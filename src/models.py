@@ -624,3 +624,388 @@ class JobExecutionHistory(BaseModel):
             ObjectId: str,
             datetime: lambda v: v.isoformat() if v else None
         }
+
+
+# ============== Ingestion (Vectorization) Models ==============
+
+from .vectorstore.base import VectorStoreType  # noqa: E402
+
+
+class EmbeddingSettings(BaseModel):
+    """Per-job embedding configuration."""
+    provider: str = Field(default="openai", description="Provider: openai, ollama, google")
+    model: str = Field(default="text-embedding-3-small", description="Embedding model name")
+    api_key: Optional[str] = Field(default=None, description="API key override (defaults to global LLM key)")
+    base_url: Optional[str] = Field(default=None, description="Base URL override (e.g. Ollama endpoint)")
+    dimensions: Optional[int] = Field(default=None, description="Optional dimensions hint (must match the vector store schema)")
+
+
+class ChunkingSettings(BaseModel):
+    """Per-job chunking configuration."""
+    strategy: str = Field(default="markdown_headers", description="Strategy: fixed | recursive | markdown_headers")
+    chunk_size: int = Field(default=1200, description="Max characters per chunk")
+    chunk_overlap: int = Field(default=150, description="Characters of overlap between adjacent chunks")
+
+
+class VectorStoreConfig(BaseModel):
+    """Configuration for a vector store integration."""
+    type: VectorStoreType = Field(description="Vector store type")
+    config: dict[str, Any] = Field(default_factory=dict, description="Backend-specific configuration")
+    namespace: str = Field(default="default", description="Logical partition (collection / namespace)")
+
+    class Config:
+        use_enum_values = True
+
+
+class IngestionFileStatus(str, Enum):
+    """Status of a single document during ingestion."""
+    PENDING = "pending"
+    DOWNLOADING = "downloading"
+    CHUNKING = "chunking"
+    EMBEDDING = "embedding"
+    UPSERTING = "upserting"
+    EXTRACTING_GRAPH = "extracting_graph"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
+class IngestionFileResult(BaseModel):
+    """Result of ingesting a single markdown document."""
+    source_path: str = Field(description="Markdown path in source")
+    doc_id: Optional[str] = Field(default=None)
+    status: IngestionFileStatus = Field(default=IngestionFileStatus.PENDING)
+    chunk_count: int = Field(default=0)
+    entity_count: int = Field(default=0)
+    relation_count: int = Field(default=0)
+    error_message: Optional[str] = Field(default=None)
+    started_at: Optional[datetime] = Field(default=None)
+    completed_at: Optional[datetime] = Field(default=None)
+
+
+class IngestionStats(BaseModel):
+    """Statistics for an ingestion job."""
+    total_documents: int = Field(default=0)
+    pending_documents: int = Field(default=0)
+    completed_documents: int = Field(default=0)
+    failed_documents: int = Field(default=0)
+    skipped_documents: int = Field(default=0)
+    total_chunks: int = Field(default=0)
+    total_entities: int = Field(default=0)
+    total_relations: int = Field(default=0)
+    completion_percentage: float = Field(default=0.0)
+
+
+class GraphOntologyRelation(BaseModel):
+    type: str
+    source: list[str] = Field(default_factory=list)
+    target: list[str] = Field(default_factory=list)
+
+
+class GraphOntology(BaseModel):
+    node_labels: list[str] = Field(default_factory=list)
+    relations: list[GraphOntologyRelation] = Field(default_factory=list)
+    node_properties: dict[str, list[str]] = Field(default_factory=dict)
+
+
+class GraphSettings(BaseModel):
+    """Per-job graph extraction configuration."""
+    enabled: bool = Field(default=False)
+    mode: str = Field(default="lexical", description="lexical | schema_guided")
+    ontology: Optional[GraphOntology] = Field(default=None)
+    ontology_source: Optional[str] = Field(
+        default=None,
+        description="YAML/JSON string or filesystem path (alternative to ontology)",
+    )
+    llm_provider: Optional[str] = Field(default=None)
+    llm_model: Optional[str] = Field(default=None)
+    llm_api_key: Optional[str] = Field(default=None)
+    llm_base_url: Optional[str] = Field(default=None)
+    max_entities_per_chunk: int = Field(default=15)
+    max_relations_per_chunk: int = Field(default=10)
+    chunk_concurrency: int = Field(default=2)
+
+
+class IngestionJob(BaseModel):
+    """
+    Vectorization job: read markdown from a SourceIntegration, chunk + embed,
+    and upsert into a VectorStoreIntegration.
+    """
+    id: Optional[str] = Field(default=None, alias="_id")
+    name: str
+    description: Optional[str] = None
+
+    source: IntegrationConfig = Field(description="Markdown source integration")
+    vector_store: VectorStoreConfig = Field(description="Vector store integration")
+
+    source_folder: Optional[str] = None
+    source_extensions: list[str] = Field(default=[".md"])
+
+    embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
+    chunking: ChunkingSettings = Field(default_factory=ChunkingSettings)
+    graph: GraphSettings = Field(default_factory=GraphSettings)
+
+    batch_size: int = Field(default=4, description="Number of documents to process concurrently")
+    delete_orphans: bool = Field(default=False, description="Remove vectors for documents missing from source")
+
+    schedule_cron: Optional[str] = None
+    schedule_enabled: bool = False
+
+    status: JobStatus = Field(default=JobStatus.PENDING)
+    stats: IngestionStats = Field(default_factory=IngestionStats)
+    file_results: list[IngestionFileResult] = Field(default_factory=list)
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+    error_message: Optional[str] = None
+    retry_count: int = 0
+    max_retries: int = 3
+
+    class Config:
+        populate_by_name = True
+        use_enum_values = True
+        json_encoders = {
+            ObjectId: str,
+            datetime: lambda v: v.isoformat() if v else None,
+        }
+
+    def update_stats(self) -> None:
+        total = len(self.file_results)
+        completed = sum(1 for f in self.file_results if f.status == IngestionFileStatus.COMPLETED)
+        skipped = sum(1 for f in self.file_results if f.status == IngestionFileStatus.SKIPPED)
+        failed = sum(1 for f in self.file_results if f.status == IngestionFileStatus.FAILED)
+        pending = sum(1 for f in self.file_results if f.status == IngestionFileStatus.PENDING)
+        self.stats = IngestionStats(
+            total_documents=total,
+            pending_documents=pending,
+            completed_documents=completed + skipped,
+            failed_documents=failed,
+            skipped_documents=skipped,
+            total_chunks=sum(f.chunk_count for f in self.file_results),
+            total_entities=sum(getattr(f, "entity_count", 0) or 0 for f in self.file_results),
+            total_relations=sum(getattr(f, "relation_count", 0) or 0 for f in self.file_results),
+            completion_percentage=round(((completed + skipped) / total) * 100, 2) if total else 0.0,
+        )
+        self.updated_at = datetime.utcnow()
+
+
+class IngestionJobCreateRequest(BaseModel):
+    """Request to create an ingestion job."""
+    name: str
+    description: Optional[str] = None
+    source: IntegrationConfig
+    vector_store: VectorStoreConfig
+    source_folder: Optional[str] = None
+    source_extensions: list[str] = Field(default=[".md"])
+    embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
+    chunking: ChunkingSettings = Field(default_factory=ChunkingSettings)
+    graph: GraphSettings = Field(default_factory=GraphSettings)
+    batch_size: int = 4
+    delete_orphans: bool = False
+    schedule_cron: Optional[str] = None
+    schedule_enabled: bool = False
+
+
+class IngestionJobUpdateRequest(BaseModel):
+    """Partial update for an ingestion job."""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    source: Optional[IntegrationConfig] = None
+    vector_store: Optional[VectorStoreConfig] = None
+    source_folder: Optional[str] = None
+    source_extensions: Optional[list[str]] = None
+    embedding: Optional[EmbeddingSettings] = None
+    chunking: Optional[ChunkingSettings] = None
+    graph: Optional[GraphSettings] = None
+    batch_size: Optional[int] = None
+    delete_orphans: Optional[bool] = None
+    schedule_cron: Optional[str] = None
+    schedule_enabled: Optional[bool] = None
+
+
+class IngestionAnalysis(BaseModel):
+    """Diff between source markdown and indexed documents."""
+    source_documents: int = 0
+    indexed_documents: int = 0
+    to_ingest: list[dict] = Field(default_factory=list)
+    up_to_date: list[dict] = Field(default_factory=list)
+    orphans: list[dict] = Field(default_factory=list, description="Indexed but missing from source")
+    completion_percentage: float = 0.0
+
+
+# Schemas describing vector store config fields (for UI rendering).
+CHROMA_VS_SCHEMA = IntegrationSchema(
+    type=IntegrationType.LOCAL,  # placeholder; UI uses .type only as opaque key
+    name="Chroma (filesystem)",
+    description="Embedded Chroma vector store persisted on local disk",
+    fields=[
+        ConfigFieldDefinition(
+            name="path", label="Storage Path", required=True,
+            placeholder="./.data/chroma",
+            description="Filesystem path where the vector database is persisted",
+        ),
+    ],
+)
+
+PGVECTOR_VS_SCHEMA = IntegrationSchema(
+    type=IntegrationType.LOCAL,  # placeholder
+    name="pgvector (PostgreSQL)",
+    description="Remote PostgreSQL with pgvector extension",
+    fields=[
+        ConfigFieldDefinition(
+            name="dsn", label="DSN", required=True, field_type="password",
+            placeholder="postgresql://user:pass@host:5432/db",
+            description="PostgreSQL connection string",
+        ),
+        ConfigFieldDefinition(
+            name="table", label="Table", required=False,
+            placeholder="ws_mark_flow_chunks",
+            description="Table name (auto-created on first use)",
+        ),
+        ConfigFieldDefinition(
+            name="embedding_dim", label="Embedding Dim", required=True,
+            placeholder="1536",
+            description="Vector dimensionality (must match the embedding model)",
+        ),
+    ],
+)
+
+
+MONGO_ATLAS_VS_SCHEMA = IntegrationSchema(
+    type=IntegrationType.LOCAL,  # placeholder
+    name="MongoDB Atlas Vector Search",
+    description="MongoDB Atlas (or Atlas Local) with $vectorSearch",
+    fields=[
+        ConfigFieldDefinition(
+            name="uri", label="MongoDB URI", required=True, field_type="password",
+            placeholder="mongodb+srv://user:pass@cluster.mongodb.net",
+            description="MongoDB connection string",
+        ),
+        ConfigFieldDefinition(
+            name="database", label="Database", required=True,
+            placeholder="ws_mark_flow",
+            description="Database name",
+        ),
+        ConfigFieldDefinition(
+            name="collection", label="Collection", required=False,
+            placeholder="ws_mark_flow_chunks",
+            description="Collection name (auto-created on first insert)",
+        ),
+        ConfigFieldDefinition(
+            name="embedding_dim", label="Embedding Dim", required=True,
+            placeholder="1536",
+            description="Vector dimensionality (must match the embedding model)",
+        ),
+        ConfigFieldDefinition(
+            name="index_name", label="Vector Index Name", required=False,
+            placeholder="vector_index",
+            description="Name of the Atlas vector search index",
+        ),
+        ConfigFieldDefinition(
+            name="similarity", label="Similarity", required=False,
+            field_type="select",
+            options=["cosine", "euclidean", "dotProduct"],
+            placeholder="cosine",
+            description="Similarity metric for the vector index (default: cosine)",
+        ),
+    ],
+)
+
+
+NEO4J_VS_SCHEMA = IntegrationSchema(
+    type=IntegrationType.LOCAL,  # placeholder
+    name="Neo4j (vector + graph)",
+    description="Neo4j 5.11+ HNSW vector index with optional knowledge graph",
+    fields=[
+        ConfigFieldDefinition(
+            name="uri", label="Bolt URI", required=True,
+            placeholder="bolt://localhost:7687",
+            description="bolt://host:7687 or neo4j+s://aura-host",
+        ),
+        ConfigFieldDefinition(
+            name="username", label="Username", required=True,
+            placeholder="neo4j",
+        ),
+        ConfigFieldDefinition(
+            name="password", label="Password", required=True,
+            field_type="password",
+        ),
+        ConfigFieldDefinition(
+            name="database", label="Database", required=False,
+            placeholder="neo4j",
+            description="Neo4j database name (default: neo4j)",
+        ),
+        ConfigFieldDefinition(
+            name="embedding_dim", label="Embedding Dim", required=True,
+            placeholder="1536",
+            description="Vector dimensionality (must match the embedding model)",
+        ),
+        ConfigFieldDefinition(
+            name="index_name", label="Vector Index Name", required=False,
+            placeholder="ws_mark_flow_chunk_embeddings",
+            description="Name of the Neo4j vector index",
+        ),
+        ConfigFieldDefinition(
+            name="similarity", label="Similarity", required=False,
+            field_type="select",
+            options=["cosine", "euclidean"],
+            placeholder="cosine",
+            description="Similarity metric for the vector index (default: cosine)",
+        ),
+    ],
+)
+
+
+REDIS_VS_SCHEMA = IntegrationSchema(
+    type=IntegrationType.LOCAL,  # placeholder
+    name="Redis (RediSearch)",
+    description="Redis Stack with RediSearch vector index (HNSW or FLAT)",
+    fields=[
+        ConfigFieldDefinition(
+            name="url", label="Redis URL", required=True, field_type="password",
+            placeholder="redis://:password@localhost:6379/0",
+            description="redis:// or rediss:// connection URL",
+        ),
+        ConfigFieldDefinition(
+            name="index_name", label="Index Name", required=False,
+            placeholder="ws_mark_flow_chunks_idx",
+            description="RediSearch index name (auto-created on first connect)",
+        ),
+        ConfigFieldDefinition(
+            name="key_prefix", label="Key Prefix", required=False,
+            placeholder="ws_mark_flow_chunk",
+            description="Prefix for chunk hash keys",
+        ),
+        ConfigFieldDefinition(
+            name="embedding_dim", label="Embedding Dim", required=True,
+            placeholder="1536",
+            description="Vector dimensionality (must match the embedding model)",
+        ),
+        ConfigFieldDefinition(
+            name="similarity", label="Distance Metric", required=False,
+            field_type="select",
+            options=["cosine", "l2", "ip"],
+            placeholder="cosine",
+            description="Distance metric (default: cosine)",
+        ),
+        ConfigFieldDefinition(
+            name="algorithm", label="Index Algorithm", required=False,
+            field_type="select",
+            options=["HNSW", "FLAT"],
+            placeholder="HNSW",
+            description="HNSW = approximate, fast; FLAT = exact, slower at scale",
+        ),
+    ],
+)
+
+
+VECTOR_STORE_SCHEMAS: dict[str, IntegrationSchema] = {
+    VectorStoreType.CHROMA.value: CHROMA_VS_SCHEMA,
+    VectorStoreType.PGVECTOR.value: PGVECTOR_VS_SCHEMA,
+    VectorStoreType.MONGO_ATLAS.value: MONGO_ATLAS_VS_SCHEMA,
+    VectorStoreType.NEO4J.value: NEO4J_VS_SCHEMA,
+    VectorStoreType.REDIS.value: REDIS_VS_SCHEMA,
+}

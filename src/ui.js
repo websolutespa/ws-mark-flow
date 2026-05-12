@@ -10,6 +10,49 @@ function converterApp() {
             jobs: [],
             schemas: [],
 
+            // Ingestion data
+            ingestionJobs: [],
+            vectorStoreSchemas: {},
+            vectorStoreSupported: [],
+
+            // Ingestion modals
+            showIngestionJobModal: false,
+            showIngestionAnalysisModal: false,
+            showQueryModal: false,
+            editingIngestionJob: null,
+            currentIngestionAnalysisJobId: null,
+            ingestionAnalysisResult: {},
+            currentVectorStoreFields: [],
+            ingestionForm: {
+                name: '',
+                description: '',
+                source_config_id: '',
+                source_folder: '',
+                extensionsStr: '.md',
+                vector_store_type: '',
+                namespace: 'default',
+                vector_store_config: {},
+                embedding_provider: 'openai',
+                embedding_model: 'text-embedding-3-small',
+                embedding_api_key: '',
+                embedding_api_key_set: false,
+                embedding_base_url: '',
+                chunk_strategy: 'markdown_headers',
+                chunk_size: 1200,
+                chunk_overlap: 150,
+                batch_size: 4,
+                delete_orphans: false,
+                schedule_cron: '',
+                schedule_enabled: false,
+            },
+
+            // Vector query state
+            queryJobId: null,
+            queryJobName: '',
+            queryForm: { query: '', k: 5 },
+            queryResults: [],
+            queryRanOnce: false,
+
             // New Job modal
             showNewJobModal: false,
 
@@ -95,6 +138,8 @@ function converterApp() {
                 await this.loadSources();
                 await this.loadDestinations();
                 await this.loadJobs();
+                await this.loadVectorStoreSchemas();
+                await this.loadIngestionJobs();
             },
             
             showAlert(message, type = 'success') {
@@ -583,6 +628,332 @@ function converterApp() {
                 } catch (e) {
                     this.showAlert(e.message, 'error');
                 }
-            }
+            },
+
+            // ============== Ingestion ==============
+
+            async loadVectorStoreSchemas() {
+                try {
+                    const data = await this.api('/vector-stores');
+                    this.vectorStoreSupported = data.supported || [];
+                    this.vectorStoreSchemas = data.schemas || {};
+                } catch (e) {
+                    console.error('Failed to load vector-store schemas:', e);
+                }
+            },
+
+            async loadIngestionJobs() {
+                try {
+                    this.ingestionJobs = await this.api('/ingestion-jobs');
+                } catch (e) {
+                    console.error('Failed to load ingestion jobs:', e);
+                }
+            },
+
+            _resetIngestionForm() {
+                this.ingestionForm = {
+                    name: '',
+                    description: '',
+                    source_config_id: '',
+                    source_folder: '',
+                    extensionsStr: '.md',
+                    vector_store_type: '',
+                    namespace: 'default',
+                    vector_store_config: {},
+                    embedding_provider: 'openai',
+                    embedding_model: 'text-embedding-3-small',
+                    embedding_api_key: '',
+                    embedding_api_key_set: false,
+                    embedding_base_url: '',
+                    chunk_strategy: 'markdown_headers',
+                    chunk_size: 1200,
+                    chunk_overlap: 150,
+                    batch_size: 4,
+                    delete_orphans: false,
+                    graph_enabled: false,
+                    graph_mode: 'lexical',
+                    graph_llm_provider: '',
+                    graph_llm_model: '',
+                    graph_max_entities: 15,
+                    graph_max_relations: 10,
+                    graph_ontology_source: '',
+                    schedule_cron: '',
+                    schedule_enabled: false,
+                };
+                this.currentVectorStoreFields = [];
+            },
+
+            openNewIngestionJobModal() {
+                this.editingIngestionJob = null;
+                this._resetIngestionForm();
+                this.showIngestionJobModal = true;
+            },
+
+            closeIngestionJobModal() {
+                this.showIngestionJobModal = false;
+                this.editingIngestionJob = null;
+            },
+
+            onVectorStoreTypeChange() {
+                const t = this.ingestionForm.vector_store_type;
+                const schema = this.vectorStoreSchemas[t];
+                this.currentVectorStoreFields = schema ? schema.fields : [];
+                // Initialize empty values for fields not yet present
+                for (const field of this.currentVectorStoreFields) {
+                    if (!(field.name in this.ingestionForm.vector_store_config)) {
+                        this.ingestionForm.vector_store_config[field.name] = '';
+                    }
+                }
+            },
+
+            // Pick a saved configuration (sources or destinations) and return
+            // a {type, config} ready to be used as IntegrationConfig payload.
+            _resolveSourceConfig(refId) {
+                if (!refId) return null;
+                const [kind, id] = refId.split(':');
+                const list = kind === 'src' ? this.sources : this.destinations;
+                const found = list.find(c => c._id === id);
+                return found ? { type: found.type, config: found.config } : null;
+            },
+
+            // Find the saved-config dropdown id from a stored {type, config}.
+            _findSourceRef(integrationConfig) {
+                if (!integrationConfig) return '';
+                const sameType = c => c.type === integrationConfig.type;
+                const sameCfg  = c => JSON.stringify(c.config) === JSON.stringify(integrationConfig.config);
+                const inSrc  = this.sources.find(c => sameType(c) && sameCfg(c));
+                if (inSrc) return 'src:' + inSrc._id;
+                const inDest = this.destinations.find(c => sameType(c) && sameCfg(c));
+                if (inDest) return 'dest:' + inDest._id;
+                return '';
+            },
+
+            _cleanVectorStoreConfig() {
+                const out = {};
+                for (const [k, v] of Object.entries(this.ingestionForm.vector_store_config || {})) {
+                    if (v === '' || v === null || v === undefined) continue;
+                    // Cast numeric fields like embedding_dim
+                    if (k === 'embedding_dim' && v !== '' && !isNaN(Number(v))) {
+                        out[k] = Number(v);
+                    } else {
+                        out[k] = v;
+                    }
+                }
+                return out;
+            },
+
+            _buildIngestionPayload() {
+                const f = this.ingestionForm;
+                const sourceCfg = this._resolveSourceConfig(f.source_config_id);
+                if (!sourceCfg) throw new Error('Pick a markdown source configuration');
+                if (!f.vector_store_type) throw new Error('Pick a vector store backend');
+
+                const extensions = (f.extensionsStr || '.md')
+                    .split(',').map(s => s.trim()).filter(Boolean);
+
+                const embedding = {
+                    provider: f.embedding_provider,
+                    model: f.embedding_model,
+                };
+                if (f.embedding_api_key)  embedding.api_key  = f.embedding_api_key;
+                if (f.embedding_base_url) embedding.base_url = f.embedding_base_url;
+
+                return {
+                    name: f.name,
+                    description: f.description || null,
+                    source: sourceCfg,
+                    vector_store: {
+                        type: f.vector_store_type,
+                        config: this._cleanVectorStoreConfig(),
+                        namespace: f.namespace || 'default',
+                    },
+                    source_folder: f.source_folder || null,
+                    source_extensions: extensions,
+                    embedding,
+                    chunking: {
+                        strategy: f.chunk_strategy,
+                        chunk_size: f.chunk_size,
+                        chunk_overlap: f.chunk_overlap,
+                    },
+                    graph: this._buildGraphSettings(),
+                    batch_size: f.batch_size,
+                    delete_orphans: !!f.delete_orphans,
+                    schedule_cron: f.schedule_cron || null,
+                    schedule_enabled: !!f.schedule_enabled,
+                };
+            },
+
+            _buildGraphSettings() {
+                const f = this.ingestionForm;
+                const g = {
+                    enabled: !!f.graph_enabled,
+                    mode: f.graph_mode || 'lexical',
+                    max_entities_per_chunk: f.graph_max_entities ?? 15,
+                    max_relations_per_chunk: f.graph_max_relations ?? 10,
+                };
+                if (f.graph_llm_provider) g.llm_provider = f.graph_llm_provider;
+                if (f.graph_llm_model)    g.llm_model    = f.graph_llm_model;
+                if (f.graph_mode === 'schema_guided' && f.graph_ontology_source) {
+                    g.ontology_source = f.graph_ontology_source;
+                }
+                return g;
+            },
+
+            async saveIngestionJob(thenRun = false) {
+                try {
+                    const payload = this._buildIngestionPayload();
+                    let job;
+                    if (this.editingIngestionJob) {
+                        job = await this.api(`/ingestion-jobs/${this.editingIngestionJob._id}`, {
+                            method: 'PATCH',
+                            body: JSON.stringify(payload),
+                        });
+                        this.showAlert('Ingestion job updated');
+                    } else {
+                        job = await this.api('/ingestion-jobs', {
+                            method: 'POST',
+                            body: JSON.stringify(payload),
+                        });
+                        this.showAlert('Ingestion job created');
+                    }
+                    if (thenRun && job?._id) {
+                        await this.api(`/ingestion-jobs/${job._id}/run`, { method: 'POST' });
+                        this.showAlert('Ingestion job started');
+                    }
+                    this.closeIngestionJobModal();
+                    await this.loadIngestionJobs();
+                } catch (e) {
+                    this.showAlert(e.message, 'error');
+                }
+            },
+
+            openEditIngestionJobModal(job) {
+                this.editingIngestionJob = job;
+                const emb = job.embedding || {};
+                const ck  = job.chunking  || {};
+                const vs  = job.vector_store || {};
+                const g   = job.graph || {};
+                this.ingestionForm = {
+                    name: job.name,
+                    description: job.description || '',
+                    source_config_id: this._findSourceRef(job.source),
+                    source_folder: job.source_folder || '',
+                    extensionsStr: (job.source_extensions || ['.md']).join(', '),
+                    vector_store_type: vs.type || '',
+                    namespace: vs.namespace || 'default',
+                    vector_store_config: { ...(vs.config || {}) },
+                    embedding_provider: emb.provider || 'openai',
+                    embedding_model: emb.model || 'text-embedding-3-small',
+                    embedding_api_key: '',
+                    embedding_api_key_set: !!emb.api_key,
+                    embedding_base_url: emb.base_url || '',
+                    chunk_strategy: ck.strategy || 'markdown_headers',
+                    chunk_size: ck.chunk_size ?? 1200,
+                    chunk_overlap: ck.chunk_overlap ?? 150,
+                    batch_size: job.batch_size ?? 4,
+                    delete_orphans: !!job.delete_orphans,
+                    graph_enabled: !!g.enabled,
+                    graph_mode: g.mode || 'lexical',
+                    graph_llm_provider: g.llm_provider || '',
+                    graph_llm_model: g.llm_model || '',
+                    graph_max_entities: g.max_entities_per_chunk ?? 15,
+                    graph_max_relations: g.max_relations_per_chunk ?? 10,
+                    graph_ontology_source: g.ontology_source
+                        || (g.ontology ? JSON.stringify(g.ontology, null, 2) : ''),
+                    schedule_cron: job.schedule_cron || '',
+                    schedule_enabled: !!job.schedule_enabled,
+                };
+                this.onVectorStoreTypeChange();
+                this.showIngestionJobModal = true;
+            },
+
+            async runIngestionJob(jobId) {
+                try {
+                    await this.api(`/ingestion-jobs/${jobId}/run`, { method: 'POST' });
+                    this.showAlert('Ingestion job started');
+                    await this.loadIngestionJobs();
+                } catch (e) {
+                    this.showAlert(e.message, 'error');
+                }
+            },
+
+            async cancelIngestionJob(jobId) {
+                try {
+                    await this.api(`/ingestion-jobs/${jobId}/cancel`, { method: 'POST' });
+                    this.showAlert('Ingestion cancellation requested');
+                    await this.loadIngestionJobs();
+                } catch (e) {
+                    this.showAlert(e.message, 'error');
+                }
+            },
+
+            async deleteIngestionJob(jobId) {
+                if (!confirm('Delete this ingestion job? Vectors in the store are not removed.')) return;
+                try {
+                    await this.api(`/ingestion-jobs/${jobId}`, { method: 'DELETE' });
+                    this.showAlert('Ingestion job deleted');
+                    await this.loadIngestionJobs();
+                } catch (e) {
+                    this.showAlert(e.message, 'error');
+                }
+            },
+
+            async analyzeIngestionJob(jobId) {
+                try {
+                    this.currentIngestionAnalysisJobId = jobId;
+                    this.ingestionAnalysisResult = await this.api(
+                        `/ingestion-jobs/${jobId}/analyze`, { method: 'POST' }
+                    );
+                    this.showIngestionAnalysisModal = true;
+                } catch (e) {
+                    this.showAlert(e.message, 'error');
+                }
+            },
+
+            async runAnalyzedIngestionJob() {
+                if (!this.currentIngestionAnalysisJobId) return;
+                try {
+                    await this.api(
+                        `/ingestion-jobs/${this.currentIngestionAnalysisJobId}/run`,
+                        { method: 'POST' }
+                    );
+                    this.showAlert('Ingestion job started');
+                    this.showIngestionAnalysisModal = false;
+                    this.currentIngestionAnalysisJobId = null;
+                    await this.loadIngestionJobs();
+                } catch (e) {
+                    this.showAlert(e.message, 'error');
+                }
+            },
+
+            openQueryModal(job) {
+                this.queryJobId = job._id;
+                this.queryJobName = job.name;
+                this.queryForm = { query: '', k: 5 };
+                this.queryResults = [];
+                this.queryRanOnce = false;
+                this.showQueryModal = true;
+            },
+
+            async runVectorQuery() {
+                if (!this.queryJobId || !this.queryForm.query) return;
+                try {
+                    const res = await this.api(
+                        `/ingestion-jobs/${this.queryJobId}/query`,
+                        {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                namespace: '',  // server falls back to job's namespace
+                                query: this.queryForm.query,
+                                k: this.queryForm.k,
+                            }),
+                        }
+                    );
+                    this.queryResults = Array.isArray(res) ? res : [];
+                    this.queryRanOnce = true;
+                } catch (e) {
+                    this.showAlert(e.message, 'error');
+                }
+            },
         };
     }

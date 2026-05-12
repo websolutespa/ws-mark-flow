@@ -524,3 +524,137 @@ class ExecutionHistoryStorage:
         cutoff = datetime.utcnow() - timedelta(days=days)
         result = await self._get_collection().delete_many({"started_at": {"$lt": cutoff}})
         return result.deleted_count
+
+
+# ============== Ingestion Job Storage ==============
+
+from .models import (  # noqa: E402
+    IngestionJob,
+    IngestionJobCreateRequest,
+    IngestionJobUpdateRequest,
+)
+
+
+class IngestionJobStorage:
+    """MongoDB storage for ingestion (vectorization) jobs."""
+
+    COLLECTION_NAME = "ingestion_jobs"
+
+    def __init__(self, mongodb_uri: str, database_name: str = "converter"):
+        self._client: Optional[AsyncMongoClient] = None
+        self._db: Optional[Database] = None
+        self._mongodb_uri = mongodb_uri
+        self._database_name = database_name
+
+    async def connect(self) -> bool:
+        try:
+            self._client = AsyncMongoClient(self._mongodb_uri)
+            self._db = self._client[self._database_name]
+            await self._client.admin.command("ping")
+            collection = self._get_collection()
+            await collection.create_index("status")
+            await collection.create_index("created_at")
+            logger.info(f"IngestionJobStorage connected: {self._database_name}")
+            return True
+        except Exception as e:
+            logger.error(f"IngestionJobStorage connect failed: {e}")
+            return False
+
+    async def disconnect(self) -> None:
+        if self._client:
+            self._client.close()
+            self._client = None
+            self._db = None
+
+    def _get_collection(self) -> Collection:
+        if self._db is None:
+            raise RuntimeError("IngestionJobStorage not connected")
+        return self._db[self.COLLECTION_NAME]
+
+    async def create(self, request: IngestionJobCreateRequest) -> IngestionJob:
+        job = IngestionJob(**request.model_dump())
+        doc = job.model_dump(by_alias=True, exclude={"id"})
+        result = await self._get_collection().insert_one(doc)
+        job.id = str(result.inserted_id)
+        return job
+
+    async def get(self, job_id: str) -> Optional[IngestionJob]:
+        try:
+            doc = await self._get_collection().find_one({"_id": ObjectId(job_id)})
+            if doc:
+                doc["_id"] = str(doc["_id"])
+                return IngestionJob.model_validate(doc)
+            return None
+        except Exception as e:
+            logger.error(f"Error getting ingestion job {job_id}: {e}")
+            return None
+
+    async def list_jobs(
+        self,
+        status: Optional[JobStatus] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[IngestionJob]:
+        query: dict = {}
+        if status:
+            query["status"] = status.value if isinstance(status, JobStatus) else status
+        cursor = (
+            self._get_collection()
+            .find(query)
+            .sort("created_at", -1)
+            .skip(offset)
+            .limit(limit)
+        )
+        out: list[IngestionJob] = []
+        async for doc in cursor:
+            doc["_id"] = str(doc["_id"])
+            out.append(IngestionJob.model_validate(doc))
+        return out
+
+    async def update(
+        self, job_id: str, update: IngestionJobUpdateRequest
+    ) -> Optional[IngestionJob]:
+        update_dict = {k: v for k, v in update.model_dump(exclude_none=True).items()}
+        update_dict["updated_at"] = datetime.utcnow()
+        if not update_dict:
+            return await self.get(job_id)
+        result = await self._get_collection().update_one(
+            {"_id": ObjectId(job_id)}, {"$set": update_dict}
+        )
+        if result.matched_count == 0:
+            return None
+        return await self.get(job_id)
+
+    async def save(self, job: IngestionJob) -> IngestionJob:
+        job.updated_at = datetime.utcnow()
+        doc = job.model_dump(by_alias=True, exclude={"id"})
+        if job.id:
+            await self._get_collection().replace_one(
+                {"_id": ObjectId(job.id)}, doc
+            )
+        else:
+            result = await self._get_collection().insert_one(doc)
+            job.id = str(result.inserted_id)
+        return job
+
+    async def delete(self, job_id: str) -> bool:
+        result = await self._get_collection().delete_one({"_id": ObjectId(job_id)})
+        return result.deleted_count > 0
+
+    async def update_status(
+        self, job_id: str, status: JobStatus, error_message: Optional[str] = None
+    ) -> bool:
+        update: dict = {
+            "status": status.value if isinstance(status, JobStatus) else status,
+            "updated_at": datetime.utcnow(),
+        }
+        if status == JobStatus.RUNNING:
+            update["started_at"] = datetime.utcnow()
+        elif status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
+            update["completed_at"] = datetime.utcnow()
+        if error_message:
+            update["error_message"] = error_message
+        result = await self._get_collection().update_one(
+            {"_id": ObjectId(job_id)}, {"$set": update}
+        )
+        return result.modified_count > 0

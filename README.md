@@ -37,7 +37,7 @@ cp .env.example .env
 # Edit .env with your MongoDB URI
 
 # Run with auto-reload
-uvicorn src.app:app --reload --port 8000
+uvicorn src.main:app --reload --port 8000
 ```
 
 ## API Documentation

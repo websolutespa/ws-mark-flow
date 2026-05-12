@@ -35,15 +35,32 @@ from .models import (
     JobExecutionHistory,
     IntegrationSchema,
     INTEGRATION_SCHEMAS,
+    IngestionJob,
+    IngestionJobCreateRequest,
+    IngestionJobUpdateRequest,
+    IngestionAnalysis,
+    VectorStoreConfig,
+    VECTOR_STORE_SCHEMAS,
 )
-from .storage import JobStorage, ConfigurationStorage, ExecutionHistoryStorage
+from .storage import (
+    JobStorage,
+    ConfigurationStorage,
+    ExecutionHistoryStorage,
+    IngestionJobStorage,
+)
 from .converter import ConversionService
+from .ingestion import IngestionService
 from .factory import (
     create_source,
     create_destination,
     get_supported_sources,
     get_supported_destinations,
 )
+from .vectorstore_factory import (
+    create_vector_store,
+    get_supported_vector_stores,
+)
+from .vectorstore.base import VectorStoreType
 from .integration import IntegrationType, CONVERTIBLE_EXTENSIONS
 from .ui import get_ui_html
 
@@ -56,14 +73,16 @@ settings = get_settings()
 storage: Optional[JobStorage] = None
 config_storage: Optional[ConfigurationStorage] = None
 history_storage: Optional[ExecutionHistoryStorage] = None
+ingestion_storage: Optional[IngestionJobStorage] = None
 scheduler: Optional[AsyncScheduler] = None
 converter = ConversionService(settings)
+ingester = IngestionService(settings)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
-    global storage, config_storage, history_storage, scheduler
+    global storage, config_storage, history_storage, ingestion_storage, scheduler
             
     # Initialize job storage
     storage = JobStorage(settings.mongodb_uri, settings.mongodb_database)
@@ -88,6 +107,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Execution history storage not available: {e}")
         history_storage = None
+
+    # Initialize ingestion job storage
+    ingestion_storage = IngestionJobStorage(settings.mongodb_uri, settings.mongodb_database)
+    if not await ingestion_storage.connect():
+        logger.warning("Ingestion storage not available")
+        ingestion_storage = None
 
     # Initialize APScheduler with MongoDB data store
     try:
@@ -125,7 +150,10 @@ async def lifespan(app: FastAPI):
         await storage.disconnect()
     if config_storage:
         await config_storage.disconnect()
+    if ingestion_storage:
+        await ingestion_storage.disconnect()
     converter.cleanup()
+    ingester.cleanup()
 
 
 async def _sync_all_schedules():
@@ -1031,6 +1059,216 @@ async def update_llm_settings(body: _LLMSettingsUpdate):
     if body.llm_api_key is not None:
         settings.llm_api_key = body.llm_api_key
     return await get_llm_settings()
+
+
+# ============== Ingestion (Vectorization) Endpoints ==============
+
+
+@app.get("/vector-stores")
+async def list_vector_store_types():
+    """List supported vector store types and their UI schemas."""
+    return {
+        "supported": get_supported_vector_stores(),
+        "schemas": {k: v.model_dump() for k, v in VECTOR_STORE_SCHEMAS.items()},
+    }
+
+
+@app.post("/ingestion-jobs", response_model=IngestionJob)
+async def create_ingestion_job(request: IngestionJobCreateRequest):
+    """Create a new ingestion (vectorization) job."""
+    if ingestion_storage is None:
+        raise HTTPException(status_code=503, detail="Ingestion storage not available")
+    return await ingestion_storage.create(request)
+
+
+@app.get("/ingestion-jobs", response_model=list[IngestionJob])
+async def list_ingestion_jobs(
+    status: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """List ingestion jobs."""
+    if ingestion_storage is None:
+        return []
+    status_enum = JobStatus(status) if status else None
+    return await ingestion_storage.list_jobs(status=status_enum, limit=limit, offset=offset)
+
+
+@app.get("/ingestion-jobs/{job_id}", response_model=IngestionJob)
+async def get_ingestion_job(job_id: str):
+    """Get an ingestion job by id."""
+    if ingestion_storage is None:
+        raise HTTPException(status_code=503, detail="Ingestion storage not available")
+    job = await ingestion_storage.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Ingestion job not found")
+    return job
+
+
+@app.patch("/ingestion-jobs/{job_id}", response_model=IngestionJob)
+async def update_ingestion_job(job_id: str, update: IngestionJobUpdateRequest):
+    """Update an ingestion job."""
+    if ingestion_storage is None:
+        raise HTTPException(status_code=503, detail="Ingestion storage not available")
+    job = await ingestion_storage.update(job_id, update)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Ingestion job not found")
+    return job
+
+
+@app.delete("/ingestion-jobs/{job_id}")
+async def delete_ingestion_job(job_id: str):
+    """Delete an ingestion job."""
+    if ingestion_storage is None:
+        raise HTTPException(status_code=503, detail="Ingestion storage not available")
+    deleted = await ingestion_storage.delete(job_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Ingestion job not found")
+    return {"message": "Ingestion job deleted"}
+
+
+@app.post("/ingestion-jobs/{job_id}/analyze", response_model=IngestionAnalysis)
+async def analyze_ingestion_job(job_id: str):
+    """Diff source markdown vs the indexed documents in the vector store."""
+    if ingestion_storage is None:
+        raise HTTPException(status_code=503, detail="Ingestion storage not available")
+    job = await ingestion_storage.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Ingestion job not found")
+
+    from .chunking import ChunkingParams, chunking_version
+
+    chunk_ver = chunking_version(
+        ChunkingParams(
+            strategy=job.chunking.strategy,
+            chunk_size=job.chunking.chunk_size,
+            chunk_overlap=job.chunking.chunk_overlap,
+        )
+    )
+
+    src = create_source(IntegrationType(job.source.type), job.source.config)
+    vs = create_vector_store(VectorStoreType(job.vector_store.type), job.vector_store.config)
+    try:
+        async with src, vs:
+            analysis, _ = await ingester.analyze(
+                source=src,
+                vector_store=vs,
+                namespace=job.vector_store.namespace,
+                embedding_model=job.embedding.model,
+                chunk_version=chunk_ver,
+                source_extensions=job.source_extensions,
+                source_folder=job.source_folder,
+            )
+        return analysis
+    except Exception as e:
+        logger.exception("Ingestion analysis failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def run_ingestion_job_background(job_id: str):
+    """Background task to execute an ingestion job."""
+    if ingestion_storage is None:
+        return
+    job = await ingestion_storage.get(job_id)
+    if job is None:
+        return
+
+    try:
+        src = create_source(IntegrationType(job.source.type), job.source.config)
+        vs = create_vector_store(
+            VectorStoreType(job.vector_store.type), job.vector_store.config
+        )
+
+        async def progress_callback(updated_job, current, total):
+            await ingestion_storage.save(updated_job)
+
+        async with src, vs:
+            updated = await ingester.run(job, src, vs, progress_callback=progress_callback)
+
+        await ingestion_storage.save(updated)
+    except Exception as e:
+        logger.exception(f"Ingestion job {job_id} failed")
+        await ingestion_storage.update_status(job_id, JobStatus.FAILED, str(e))
+
+
+@app.post("/ingestion-jobs/{job_id}/run")
+async def run_ingestion_job(job_id: str, background_tasks: BackgroundTasks):
+    """Start an ingestion job in the background."""
+    if ingestion_storage is None:
+        raise HTTPException(status_code=503, detail="Ingestion storage not available")
+    job = await ingestion_storage.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Ingestion job not found")
+    if job.status == JobStatus.RUNNING:
+        raise HTTPException(status_code=400, detail="Job is already running")
+
+    await ingestion_storage.update_status(job_id, JobStatus.PENDING)
+    background_tasks.add_task(run_ingestion_job_background, job_id)
+    return {"message": "Ingestion job started", "job_id": job_id}
+
+
+@app.post("/ingestion-jobs/{job_id}/cancel")
+async def cancel_ingestion_job(job_id: str):
+    """Mark a running ingestion job as cancelled (best-effort)."""
+    if ingestion_storage is None:
+        raise HTTPException(status_code=503, detail="Ingestion storage not available")
+    job = await ingestion_storage.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Ingestion job not found")
+    if job.status != JobStatus.RUNNING:
+        raise HTTPException(status_code=400, detail="Job is not running")
+    await ingestion_storage.update_status(job_id, JobStatus.CANCELLED)
+    return {"message": "Ingestion job cancelled"}
+
+
+class _VectorQueryRequest(BaseModel):
+    namespace: str = Field(default="default")
+    query: str = Field(description="Free-text query to embed and search")
+    k: int = Field(default=5, ge=1, le=50)
+    filter: Optional[dict] = None
+
+
+@app.post("/ingestion-jobs/{job_id}/query")
+async def query_ingestion_job(job_id: str, body: _VectorQueryRequest):
+    """Embed a free-text query and run top-k similarity search against the job's vector store."""
+    if ingestion_storage is None:
+        raise HTTPException(status_code=503, detail="Ingestion storage not available")
+    job = await ingestion_storage.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Ingestion job not found")
+
+    from .embedding import EmbeddingService
+
+    vs = create_vector_store(VectorStoreType(job.vector_store.type), job.vector_store.config)
+    embedder = EmbeddingService(settings)
+    try:
+        embeddings = await embedder.embed(
+            [body.query],
+            provider=job.embedding.provider,
+            model=job.embedding.model,
+            api_key=job.embedding.api_key,
+            base_url=job.embedding.base_url,
+        )
+        async with vs:
+            hits = await vs.query(
+                namespace=body.namespace or job.vector_store.namespace,
+                embedding=embeddings[0],
+                k=body.k,
+                filter=body.filter,
+            )
+        return [
+            {
+                "chunk_id": c.chunk_id,
+                "doc_id": c.doc_id,
+                "text": c.text,
+                "metadata": c.metadata,
+                "score": score,
+            }
+            for c, score in hits
+        ]
+    except Exception as e:
+        logger.exception("Vector query failed")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============== UI Endpoints ==============

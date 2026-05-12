@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM python:3.12-slim
+FROM --platform=$TARGETPLATFORM python:3.12-slim
 
 LABEL org.opencontainers.image.source="https://github.com/websolutespa/ws-mark-flow"
 
