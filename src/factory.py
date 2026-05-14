@@ -21,6 +21,7 @@ from .integration import (
     S3Destination,
     GCSSource,
     GCSDestination,
+    SitemapSource,
 )
 
 
@@ -33,6 +34,7 @@ SOURCE_REGISTRY: dict[IntegrationType, Type[SourceIntegration]] = {
     IntegrationType.GOOGLE_DRIVE: GoogleDriveSource,
     IntegrationType.S3: S3Source,
     IntegrationType.GCS: GCSSource,
+    IntegrationType.SITEMAP: SitemapSource,
 }
 
 # Registry of destination integrations

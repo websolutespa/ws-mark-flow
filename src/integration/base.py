@@ -47,6 +47,7 @@ class IntegrationType(str, Enum):
     GOOGLE_DRIVE = "google_drive"
     SFTP = "sftp"
     LOCAL = "local"
+    SITEMAP = "sitemap"
 
 
 class BaseIntegration(ABC):

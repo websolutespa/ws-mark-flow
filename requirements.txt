@@ -14,14 +14,14 @@ pymongo==4.17.0
 # conversion
 markitdown[all]==0.1.5
 docling==2.93.0
-torch==2.11.0
-torchvision==0.26.0
+torch==2.12.0
+torchvision==0.27.0
 pymupdf==1.27.2.3
 
 # LLM providers (for ACCURATE strategy)
 openai==2.36.0
-anthropic==0.101.0
-google-genai==2.0.1
+anthropic==0.102.0
+google-genai==2.2.0
 
 # google drive auth (for service account)
 PyJWT==2.12.1
@@ -39,6 +39,10 @@ aiobotocore==3.7.0
 
 # google cloud storage
 google-cloud-storage==3.10.1
+
+# sitemap source (HTML scraping)
+beautifulsoup4==4.14.3
+lxml==6.1.0
 
 # vector stores
 chromadb==1.5.9

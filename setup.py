@@ -18,7 +18,7 @@ def _read_requirements():
 
 setup(
     name="ws_mark_flow",
-    version="0.0.7",
+    version="0.0.8",
     description="Convert files from various sources (SharePoint, S3, Azure Blob, etc.) to Markdown and upload to destinations (Google Drive, SharePoint, etc.).",
     long_description=(_here / "README.md").read_text(encoding="utf-8"),
     long_description_content_type="text/markdown",

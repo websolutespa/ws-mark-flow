@@ -533,6 +533,73 @@ SFTP_SCHEMA = IntegrationSchema(
     ]
 )
 
+SITEMAP_SCHEMA = IntegrationSchema(
+    type=IntegrationType.SITEMAP,
+    name="Sitemap (Web)",
+    description="Scrape pages listed in a sitemap.xml and convert them to Markdown",
+    fields=[
+        ConfigFieldDefinition(
+            name="sitemap_url",
+            label="Sitemap URL",
+            required=True,
+            placeholder="https://example.com/sitemap.xml",
+            description="HTTP(S) URL (or local file path) of a sitemap.xml. Sitemap indexes are followed."
+        ),
+        ConfigFieldDefinition(
+            name="filter_urls",
+            label="Include URL Patterns",
+            field_type="textarea",
+            required=False,
+            placeholder="^https://example\\.com/docs/\nblog/",
+            description="One regex per line. If non-empty, a URL must match at least one to be included."
+        ),
+        ConfigFieldDefinition(
+            name="exclude_urls",
+            label="Exclude URL Patterns",
+            field_type="textarea",
+            required=False,
+            placeholder="/tag/\n/author/",
+            description="One regex per line. URLs matching any are skipped."
+        ),
+        ConfigFieldDefinition(
+            name="content_selector",
+            label="Content CSS Selector",
+            required=False,
+            placeholder="#main",
+            description="Optional CSS selector to narrow content (e.g. '#main', 'main', 'article')."
+        ),
+        ConfigFieldDefinition(
+            name="remove_selectors",
+            label="Remove CSS Selectors",
+            field_type="textarea",
+            required=False,
+            placeholder="nav\nheader\nfooter\naside\nscript\nstyle",
+            description="One CSS selector per line. Defaults strip nav/header/footer/aside/script/style/form/iframe/noscript."
+        ),
+        ConfigFieldDefinition(
+            name="requests_per_second",
+            label="Requests per Second",
+            required=False,
+            placeholder="2",
+            description="Politeness throttle (default: 2). Use 0 to disable."
+        ),
+        ConfigFieldDefinition(
+            name="max_urls",
+            label="Max URLs",
+            required=False,
+            placeholder="500",
+            description="Optional cap on number of URLs to process."
+        ),
+        ConfigFieldDefinition(
+            name="user_agent",
+            label="User-Agent",
+            required=False,
+            placeholder="ws-mark-flow/1.0",
+            description="HTTP User-Agent header sent with each request."
+        ),
+    ]
+)
+
 # Registry of all schemas
 INTEGRATION_SCHEMAS: dict[IntegrationType, IntegrationSchema] = {
     IntegrationType.LOCAL: LOCAL_SCHEMA,
@@ -541,6 +608,7 @@ INTEGRATION_SCHEMAS: dict[IntegrationType, IntegrationSchema] = {
     IntegrationType.S3: S3_SCHEMA,
     IntegrationType.AZURE_BLOB: AZURE_BLOB_SCHEMA,
     IntegrationType.SFTP: SFTP_SCHEMA,
+    IntegrationType.SITEMAP: SITEMAP_SCHEMA,
 }
 
 

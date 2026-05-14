@@ -15,6 +15,7 @@ from .google_drive import GoogleDriveConfig, GoogleDriveSource, GoogleDriveDesti
 from .sharepoint import SharePointConfig, SharePointSource, SharePointDestination
 from .s3 import S3Config, S3Source, S3Destination
 from .gcs import GCSConfig, GCSSource, GCSDestination
+from .sitemap import SitemapConfig, SitemapSource
 
 __all__ = [
     # Base classes
@@ -53,4 +54,7 @@ __all__ = [
     "GCSConfig",
     "GCSSource",
     "GCSDestination",
+    # Sitemap (source only)
+    "SitemapConfig",
+    "SitemapSource",
 ]
