@@ -2,7 +2,7 @@
 fastapi==0.136.1
 pydantic==2.13.4
 pydantic-settings==2.14.1
-uvicorn[standard]==0.46.0
+uvicorn[standard]==0.47.0
 apscheduler[mongodb]==4.0.0a6
 
 # http client
@@ -21,7 +21,7 @@ pymupdf==1.27.2.3
 # LLM providers (for ACCURATE strategy)
 openai==2.36.0
 anthropic==0.102.0
-google-genai==2.2.0
+google-genai==2.3.0
 
 # google drive auth (for service account)
 PyJWT==2.12.1
@@ -31,7 +31,7 @@ cryptography==48.0.0
 paramiko==5.0.0
 
 # azure blob storage
-azure-storage-blob==12.28.0
+azure-storage-blob==12.29.0
 aiohttp==3.13.5
 
 # aws s3
