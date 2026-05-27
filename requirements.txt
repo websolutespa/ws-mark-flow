@@ -1,8 +1,8 @@
 # app
-fastapi==0.136.1
+fastapi==0.136.3
 pydantic==2.13.4
 pydantic-settings==2.14.1
-uvicorn[standard]==0.47.0
+uvicorn[standard]==0.48.0
 apscheduler[mongodb]==4.0.0a6
 
 # http client
@@ -12,19 +12,19 @@ httpx==0.28.1
 pymongo==4.17.0
 
 # conversion
-markitdown[all]==0.1.5
-docling==2.93.0
+markitdown[all]==0.1.6
+docling==2.95.0
 torch==2.12.0
 torchvision==0.27.0
 pymupdf==1.27.2.3
 
 # LLM providers (for ACCURATE strategy)
-openai==2.36.0
-anthropic==0.102.0
-google-genai==2.3.0
+openai==2.38.0
+anthropic==0.104.1
+google-genai==2.6.0
 
 # google drive auth (for service account)
-PyJWT==2.12.1
+PyJWT==2.13.0
 cryptography==48.0.0
 
 # sftp
@@ -42,7 +42,7 @@ google-cloud-storage==3.10.1
 
 # sitemap source (HTML scraping)
 beautifulsoup4==4.14.3
-lxml==6.1.0
+lxml==6.1.1
 
 # vector stores
 chromadb==1.5.9

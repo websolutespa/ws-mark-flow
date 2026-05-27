@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from bson import ObjectId
 
-from pymongo import AsyncMongoClient
+from pymongo import AsyncMongoClient, ReturnDocument
 from pymongo.database import Database
 from pymongo.collection import Collection
 
@@ -282,6 +282,38 @@ class JobStorage:
         )
         
         return result.modified_count > 0
+
+    async def claim_job_for_run(self, job_id: str) -> Optional[ConversionJob]:
+        """Atomically claim a job for execution if no instance is running it."""
+        collection = self._get_collection()
+        now = datetime.utcnow()
+
+        try:
+            doc = await collection.find_one_and_update(
+                {
+                    "_id": ObjectId(job_id),
+                    "status": {"$ne": JobStatus.RUNNING.value},
+                },
+                {
+                    "$set": {
+                        "status": JobStatus.RUNNING.value,
+                        "started_at": now,
+                        "completed_at": None,
+                        "error_message": None,
+                        "updated_at": now,
+                    }
+                },
+                return_document=ReturnDocument.AFTER,
+            )
+        except Exception as e:
+            logger.error(f"Error claiming job {job_id}: {e}")
+            return None
+
+        if doc is None:
+            return None
+
+        doc["_id"] = str(doc["_id"])
+        return ConversionJob.model_validate(doc)
     
     async def get_pending_jobs(self) -> list[ConversionJob]:
         """Get all pending jobs."""

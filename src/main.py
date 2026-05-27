@@ -240,47 +240,10 @@ async def _scheduled_job_runner(job_id: str):
         await _remove_schedule(job_id)
         return
 
-    if job.status == JobStatus.RUNNING:
-        logger.info(f"Scheduled run: job {job_id} already running, skipping")
-        return
-
-    # Create execution history record
-    record = JobExecutionHistory(
-        job_id=job_id,
-        job_name=job.name,
-        trigger="scheduled",
-        status=JobStatus.RUNNING,
-        started_at=datetime.utcnow(),
-    )
-    record_id = None
-    if history_storage:
-        record_id = await history_storage.save(record)
-
     try:
-        await storage.update_job_status(job_id, JobStatus.PENDING)
-        await run_job_background(job_id)
-
-        # Re-read job to capture final status
-        updated = await storage.get_job(job_id)
-        if history_storage and record_id and updated:
-            await history_storage.update(
-                record_id,
-                status=updated.status,
-                completed_at=datetime.utcnow(),
-                total_files=updated.stats.total_files if updated.stats else 0,
-                completed_files=updated.stats.completed_files if updated.stats else 0,
-                failed_files=updated.stats.failed_files if updated.stats else 0,
-                error_message=updated.error_message,
-            )
+        await run_job_background(job_id, trigger="scheduled")
     except Exception as e:
         logger.error(f"Scheduled run failed for job {job_id}: {e}")
-        if history_storage and record_id:
-            await history_storage.update(
-                record_id,
-                status=JobStatus.FAILED,
-                completed_at=datetime.utcnow(),
-                error_message=str(e),
-            )
 
 
 
@@ -521,16 +484,35 @@ async def analyze_job(job_id: str):
 
 # ============== Conversion Endpoints ==============
 
-async def run_job_background(job_id: str, history_record_id: Optional[str] = None):
+async def run_job_background(job_id: str, trigger: str = "manual"):
     """Background task to run a conversion job."""
     if storage is None:
         return
-    
-    job = await storage.get_job(job_id)
-    if job is None:
-        return
-    
+
+    history_record_id = None
+
     try:
+        job = await storage.claim_job_for_run(job_id)
+        if job is None:
+            existing = await storage.get_job(job_id)
+            if existing is None:
+                logger.warning(f"Job {job_id} not found or could not be loaded")
+            elif existing.status == JobStatus.RUNNING:
+                logger.info(f"Job {job_id} is already running on another instance")
+            else:
+                logger.info(f"Job {job_id} was not claimed for execution")
+            return
+
+        if history_storage:
+            record = JobExecutionHistory(
+                job_id=job_id,
+                job_name=job.name,
+                trigger=trigger,
+                status=JobStatus.RUNNING,
+                started_at=datetime.utcnow(),
+            )
+            history_record_id = await history_storage.save(record)
+
         source_type = IntegrationType(job.source.type)
         dest_type = IntegrationType(job.destination.type)
         
@@ -551,7 +533,7 @@ async def run_job_background(job_id: str, history_record_id: Optional[str] = Non
         
         await storage.save_job(updated_job)
 
-        # Update execution history for manual runs
+        # Update execution history for this run
         if history_storage and history_record_id:
             await history_storage.update(
                 history_record_id,
@@ -562,7 +544,18 @@ async def run_job_background(job_id: str, history_record_id: Optional[str] = Non
                 failed_files=updated_job.stats.failed_files if updated_job.stats else 0,
                 error_message=updated_job.error_message,
             )
-        
+
+    except asyncio.CancelledError:
+        logger.warning(f"Job {job_id} was cancelled while running")
+        await storage.update_job_status(job_id, JobStatus.FAILED, "Job execution cancelled")
+        if history_storage and history_record_id:
+            await history_storage.update(
+                history_record_id,
+                status=JobStatus.FAILED,
+                completed_at=datetime.utcnow(),
+                error_message="Job execution cancelled",
+            )
+        raise
     except Exception as e:
         logger.error(f"Job {job_id} failed: {e}")
         await storage.update_job_status(job_id, JobStatus.FAILED, str(e))
@@ -588,23 +581,8 @@ async def run_job(job_id: str, background_tasks: BackgroundTasks):
     if job.status == JobStatus.RUNNING:
         raise HTTPException(status_code=400, detail="Job is already running")
     
-    # Update status to pending
-    await storage.update_job_status(job_id, JobStatus.PENDING)
-
-    # Create execution history record
-    record_id = None
-    if history_storage:
-        record = JobExecutionHistory(
-            job_id=job_id,
-            job_name=job.name,
-            trigger="manual",
-            status=JobStatus.RUNNING,
-            started_at=datetime.utcnow(),
-        )
-        record_id = await history_storage.save(record)
-    
     # Run in background
-    background_tasks.add_task(run_job_background, job_id, record_id)
+    background_tasks.add_task(run_job_background, job_id, "manual")
     
     return {"message": "Job started", "job_id": job_id}
 
