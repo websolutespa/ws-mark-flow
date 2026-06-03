@@ -7,9 +7,10 @@ import logging
 import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime
+from importlib.metadata import PackageNotFoundError, version as package_version
 from typing import Optional
 from pydantic import BaseModel, Field
-from fastapi import Depends, FastAPI, HTTPException, BackgroundTasks, Query, status
+from fastapi import Depends, FastAPI, HTTPException, BackgroundTasks, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -77,6 +78,16 @@ ingestion_storage: Optional[IngestionJobStorage] = None
 scheduler: Optional[AsyncScheduler] = None
 converter = ConversionService(settings)
 ingester = IngestionService(settings)
+
+
+def get_ws_mark_flow_package_version() -> Optional[str]:
+    """Return the installed Python package version, when available."""
+    for distribution_name in ("ws-mark-flow", "ws_mark_flow"):
+        try:
+            return package_version(distribution_name)
+        except PackageNotFoundError:
+            continue
+    return None
 
 
 @asynccontextmanager
@@ -249,17 +260,30 @@ async def _scheduled_job_runner(job_id: str):
 
 # ============== Basic Auth ==============
 
-http_basic = HTTPBasic(auto_error=True)
+http_basic = HTTPBasic(auto_error=False)
 
 
-def verify_credentials(credentials: HTTPBasicCredentials = Depends(http_basic)) -> str:
+def verify_credentials(
+    request: Request,
+    credentials: Optional[HTTPBasicCredentials] = Depends(http_basic),
+) -> str:
     """Validate HTTP Basic credentials against configured values.
 
     Auth is bypassed entirely when AUTH_PASSWORD is empty (default dev behaviour).
     """
+    if request.url.path.rstrip("/") == "/health":
+        return "anonymous"
+
     password = settings.auth_password
     if not password:
-        return credentials.username
+        return credentials.username if credentials else ""
+
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Basic"},
+        )
 
     valid_username = secrets.compare_digest(
         credentials.username.encode(), settings.auth_username.encode()
@@ -313,6 +337,8 @@ async def get_info():
     return {
         "name": settings.app_name,
         "version": settings.app_version,
+        "package_name": "ws-mark-flow",
+        "package_version": get_ws_mark_flow_package_version(),
         "supported_sources": get_supported_sources(),
         "supported_destinations": get_supported_destinations(),
         "convertible_extensions": CONVERTIBLE_EXTENSIONS,
