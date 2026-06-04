@@ -43,7 +43,7 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     && if [ "${DOCLING_PRELOAD_MODELS}" = "1" ]; then \
         docling-tools models download -o "${DOCLING_ARTIFACTS_PATH}"; \
       fi \
-    && rm -rf "${HF_HOME}" "${TORCH_HOME}" /root/.cache
+    && rm -rf "${HF_HOME}" "${TORCH_HOME}" /root/.cache/huggingface /root/.cache/torch
 
 # 4) App code — changes most often, kept LAST so steps 1-3 stay cached
 COPY . .
