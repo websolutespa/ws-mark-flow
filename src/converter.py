@@ -211,6 +211,11 @@ def _convert_with_markitdown(input_path: Path) -> Optional[str]:
         if result and result.markdown:
             return result.markdown
         logger.warning(f"MarkItDown: no content from {input_path}")
+        # Note: may return empty string for some PDFs/images
+        # Typically, MarkItDown is the last (fallback) resort for these files.
+        # In that case, we treat it as an empty (but not null) conversion rather than a failure
+        # to avoid reprocessing that file forever.
+        return "-"
     except Exception as e:
         logger.warning(f"MarkItDown error for {input_path}: {e}")
     return None
