@@ -96,7 +96,8 @@ uv venv
 - project requirements update
 
 ```bash
-uv pip install --upgrade -r requirements.txt --prerelease
+python -m requirements_update
+uv pip install --upgrade -r requirements.txt
 ```
 
 - build tools
