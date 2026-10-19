@@ -124,9 +124,6 @@ class _GCSBase:
         return files
 
 
-class GCSSource(_GCSBase, SourceIntegration):
-    """Google Cloud Storage source integration for reading files."""
-
     async def download_file(self, file_info: FileInfo, local_path: Path) -> bool:
         if not self._bucket:
             raise RuntimeError("Not connected. Call connect() first.")
@@ -143,6 +140,10 @@ class GCSSource(_GCSBase, SourceIntegration):
         except Exception as e:
             logger.error(f"Failed to download {file_info.path}: {e}")
             return False
+
+
+class GCSSource(_GCSBase, SourceIntegration):
+    """Google Cloud Storage source integration for reading files."""
 
 
 class GCSDestination(_GCSBase, DestinationIntegration):

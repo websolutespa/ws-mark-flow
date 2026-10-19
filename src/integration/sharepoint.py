@@ -207,7 +207,10 @@ class _SharePointBase:
         return all_items
 
     async def _get_item_id_by_path(self, path: str) -> Optional[str]:
-        url = f"{self.GRAPH_API_BASE}/sites/{self._config.site_id}/drive/root:/{path.lstrip('/')}"
+        if self._config.folder_id:
+            url = f"{self._drive_url()}/items/{self._config.folder_id}:/{path.lstrip('/')}"
+        else:
+            url = f"{self._drive_url()}/root:/{path.lstrip('/')}"
 
         response = await self._client.get(url, headers=self._get_headers())
 
@@ -229,9 +232,6 @@ class _SharePointBase:
             return f"{parent_path}/{name}".strip("/")
         return None
 
-
-class SharePointSource(_SharePointBase, SourceIntegration):
-    """SharePoint source integration for reading files via Microsoft Graph API."""
 
     async def download_file(self, file_info: FileInfo, local_path: Path) -> bool:
         if not self._access_token:
@@ -257,6 +257,10 @@ class SharePointSource(_SharePointBase, SourceIntegration):
         except Exception as e:
             logger.error(f"Download error for {file_info.path}: {e}")
             return False
+
+
+class SharePointSource(_SharePointBase, SourceIntegration):
+    """SharePoint source integration for reading files via Microsoft Graph API."""
 
 
 class SharePointDestination(_SharePointBase, DestinationIntegration):

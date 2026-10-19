@@ -138,9 +138,6 @@ class _S3Base:
         return files
 
 
-class S3Source(_S3Base, SourceIntegration):
-    """AWS S3 source integration for reading files."""
-
     async def download_file(self, file_info: FileInfo, local_path: Path) -> bool:
         if not self._client:
             raise RuntimeError("Not connected. Call connect() first.")
@@ -162,6 +159,10 @@ class S3Source(_S3Base, SourceIntegration):
         except Exception as e:
             logger.error(f"Failed to download {file_info.path}: {e}")
             return False
+
+
+class S3Source(_S3Base, SourceIntegration):
+    """AWS S3 source integration for reading files."""
 
 
 class S3Destination(_S3Base, DestinationIntegration):

@@ -116,9 +116,6 @@ class _AzureBlobBase:
         return files
 
 
-class AzureBlobSource(_AzureBlobBase, SourceIntegration):
-    """Azure Blob Storage source integration for reading files."""
-
     async def download_file(self, file_info: FileInfo, local_path: Path) -> bool:
         if not self._container_client:
             raise RuntimeError("Not connected. Call connect() first.")
@@ -137,6 +134,10 @@ class AzureBlobSource(_AzureBlobBase, SourceIntegration):
         except Exception as e:
             logger.error(f"Failed to download blob {file_info.path}: {e}")
             return False
+
+
+class AzureBlobSource(_AzureBlobBase, SourceIntegration):
+    """Azure Blob Storage source integration for reading files."""
 
 
 class AzureBlobDestination(_AzureBlobBase, DestinationIntegration):

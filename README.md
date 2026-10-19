@@ -45,6 +45,35 @@ uvicorn src.main:app --reload --port 8000
 - Redocly UI: http://localhost:8000/redoc
 - OpenAPI spec: http://localhost:8000/openapi.json
 
+### Connection test downloads
+
+For saved source and destination configurations, the **Test** results modal offers:
+
+- **Download file info (CSV)**: a UTF-8, comma-separated CSV with a header and one row
+  per `FileInfo` returned by `list_files()`. Columns include `name`, `path`,
+  `modified_at`, `size`, `content_type`, `stem`, `suffix`, and `parent_path`.
+  Missing optional values are empty cells; empty listings still include the header.
+  The filename is `<connection-name>_fileinfo.csv`, with whitespace removed from
+  the connection name (for example, `dhl-fs-CSTEAMS_fileinfo.csv`).
+  Characters unsafe in filenames are replaced with underscores.
+- **Download all files (ZIP)**: downloads each listed file using the connection's
+  download method and packages them into a ZIP, preserving relative folders.
+  The filename is `<connection-name>_files.zip` (for example,
+  `dhl-fs-CSTEAMS_files.zip`), using the same name cleanup as the CSV export.
+  The browser saves the archive to its configured download location (usually
+  Downloads); extract it locally to get the files in a folder.
+
+The test preview and both exports filter source files by `CONVERTIBLE_EXTENSIONS`
+and destination files by `MARKDOWN_EXTENSIONS`. Both exports re-list the connection
+and include all matching results, not just the modal's first ten preview files.
+Connector-specific root folders, prefixes, and other listing rules still apply. ZIP preparation happens
+on the server using temporary disk storage, which is cleaned up after delivery
+or failure. Failed file downloads fail the export rather than returning an
+incomplete ZIP.
+
+API: `GET /configurations/{id}/test/download?format=csv` or `format=zip`,
+using the same authentication as the other API endpoints.
+
 
 ## Supported Integrations
 

@@ -88,24 +88,6 @@ class _FilesystemBase:
             logger.error(f"Error listing {current_path}: {e}")
 
 
-class FilesystemSource(_FilesystemBase, SourceIntegration):
-    """Local filesystem source integration for reading files from disk."""
-
-    async def connect(self) -> bool:
-        try:
-            self._base_path = Path(self._config.path).resolve()
-            if not self._base_path.exists():
-                logger.error(f"Path does not exist: {self._base_path}")
-                return False
-            if not self._base_path.is_dir():
-                logger.error(f"Path is not a directory: {self._base_path}")
-                return False
-            logger.info(f"Connected to filesystem source: {self._base_path}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to connect to filesystem: {e}")
-            return False
-
     async def download_file(self, file_info: FileInfo, local_path: Path) -> bool:
         if not self._base_path:
             raise RuntimeError("Not connected. Call connect() first.")
@@ -125,6 +107,25 @@ class FilesystemSource(_FilesystemBase, SourceIntegration):
 
         except Exception as e:
             logger.error(f"Failed to copy file {file_info.path}: {e}")
+            return False
+
+
+class FilesystemSource(_FilesystemBase, SourceIntegration):
+    """Local filesystem source integration for reading files from disk."""
+
+    async def connect(self) -> bool:
+        try:
+            self._base_path = Path(self._config.path).resolve()
+            if not self._base_path.exists():
+                logger.error(f"Path does not exist: {self._base_path}")
+                return False
+            if not self._base_path.is_dir():
+                logger.error(f"Path is not a directory: {self._base_path}")
+                return False
+            logger.info(f"Connected to filesystem source: {self._base_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to connect to filesystem: {e}")
             return False
 
 

@@ -274,11 +274,6 @@ class _GoogleDriveBase:
         return None
 
 
-class GoogleDriveSource(_GoogleDriveBase, SourceIntegration):
-    """Google Drive source integration for downloading files to convert."""
-
-    _oauth_scope = "https://www.googleapis.com/auth/drive.readonly"
-
     async def download_file(self, file_info: FileInfo, local_path: Path) -> bool:
         if not self._access_token:
             raise RuntimeError("Not connected. Call connect() first.")
@@ -322,6 +317,12 @@ class GoogleDriveSource(_GoogleDriveBase, SourceIntegration):
                 return None
 
         return await self._get_file_id_by_name(parts[-1], current_parent)
+
+
+class GoogleDriveSource(_GoogleDriveBase, SourceIntegration):
+    """Google Drive source integration for downloading files to convert."""
+
+    _oauth_scope = "https://www.googleapis.com/auth/drive.readonly"
 
 
 class GoogleDriveDestination(_GoogleDriveBase, DestinationIntegration):

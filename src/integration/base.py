@@ -99,12 +99,6 @@ class BaseIntegration(ABC):
         pass        
 
 
-class SourceIntegration(BaseIntegration):
-    """
-    Interface for source integrations (where files are read from).
-    Sources list files and download them for conversion.
-    """
-    
     @abstractmethod
     async def download_file(self, file_info: FileInfo, local_path: Path) -> bool:
         """
@@ -118,6 +112,13 @@ class SourceIntegration(BaseIntegration):
             True if download was successful
         """
         pass
+
+
+class SourceIntegration(BaseIntegration):
+    """
+    Interface for source integrations (where files are read from).
+    Sources list files and download them for conversion.
+    """
     
     async def download_files(
         self, 

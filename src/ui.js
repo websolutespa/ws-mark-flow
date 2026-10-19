@@ -71,6 +71,9 @@ function converterApp() {
             // Test modal
             showTestModal: false,
             testResult: { success: false, message: '', sample_files: [] },
+            testConfigId: null,
+            testDownloadFormat: null,
+            testDownloadError: '',
             
             // Analysis modal
             showAnalysisModal: false,
@@ -309,9 +312,43 @@ function converterApp() {
             async testConfig(configId) {
                 try {
                     this.testResult = await this.api(`/configurations/${configId}/test`, { method: 'POST' });
+                    this.testConfigId = configId;
+                    this.testDownloadError = '';
                     this.showTestModal = true;
                 } catch (e) {
                     this.showAlert(e.message, 'error');
+                }
+            },
+
+            async downloadTestFiles(format) {
+                if (this.testDownloadFormat || !this.testConfigId) return;
+                this.testDownloadFormat = format;
+                this.testDownloadError = '';
+                let url;
+                try {
+                    const response = await fetch(
+                        `/configurations/${encodeURIComponent(this.testConfigId)}/test/download?format=${format}`
+                    );
+                    if (!response.ok) {
+                        const data = await response.json();
+                        throw new Error(data.detail || 'Download failed');
+                    }
+                    const disposition = response.headers.get('Content-Disposition') || '';
+                    const filenameMatch = disposition.match(/filename\*=UTF-8''([^;]+)|filename="([^"]+)"/i);
+                    if (!filenameMatch) throw new Error('Download response did not include a filename');
+                    const filename = filenameMatch[1] ? decodeURIComponent(filenameMatch[1]) : filenameMatch[2];
+                    url = URL.createObjectURL(await response.blob());
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                } catch (e) {
+                    this.testDownloadError = e.message;
+                } finally {
+                    if (url) setTimeout(() => URL.revokeObjectURL(url), 1000);
+                    this.testDownloadFormat = null;
                 }
             },
             

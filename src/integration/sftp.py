@@ -180,9 +180,6 @@ class _SFTPBase:
                     pass
 
 
-class SFTPSource(_SFTPBase, SourceIntegration):
-    """SFTP source integration for reading files via SSH/SFTP."""
-
     async def download_file(self, file_info: FileInfo, local_path: Path) -> bool:
         if not self._sftp:
             raise RuntimeError("Not connected. Call connect() first.")
@@ -203,6 +200,10 @@ class SFTPSource(_SFTPBase, SourceIntegration):
         self._sftp.get(remote_path, str(local_path))
 
         return True
+
+
+class SFTPSource(_SFTPBase, SourceIntegration):
+    """SFTP source integration for reading files via SSH/SFTP."""
 
 
 class SFTPDestination(_SFTPBase, DestinationIntegration):

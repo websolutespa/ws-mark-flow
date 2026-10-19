@@ -3,18 +3,25 @@ FastAPI application for the Ws-Mark-Flow AI Converter.
 Provides REST API for managing conversion jobs.
 """
 import asyncio
+import csv
 import logging
 import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime
 from importlib.metadata import PackageNotFoundError, version as package_version
-from typing import Optional
+from io import StringIO
+from pathlib import Path, PurePosixPath
+from tempfile import TemporaryDirectory
+from typing import Literal, Optional
+from urllib.parse import quote
+from zipfile import ZIP_DEFLATED, ZipFile
 from pydantic import BaseModel, Field
 from fastapi import Depends, FastAPI, HTTPException, BackgroundTasks, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
+from starlette.background import BackgroundTask
 
 from apscheduler import AsyncScheduler, ConflictPolicy
 from apscheduler.datastores.mongodb import MongoDBDataStore
@@ -62,7 +69,7 @@ from .vectorstore_factory import (
     get_supported_vector_stores,
 )
 from .vectorstore.base import VectorStoreType
-from .integration import IntegrationType, CONVERTIBLE_EXTENSIONS
+from .integration import FileInfo, IntegrationType, CONVERTIBLE_EXTENSIONS, MARKDOWN_EXTENSIONS
 from .ui import get_ui_html
 
 # Configure logging
@@ -641,7 +648,7 @@ async def test_source_connection(source: IntegrationConfig):
         
         async with source_integration:
             files = await source_integration.list_files(
-                extensions=CONVERTIBLE_EXTENSIONS[:5]  # Limit for testing
+                extensions=CONVERTIBLE_EXTENSIONS
             )
         
         return {
@@ -879,36 +886,114 @@ async def test_configuration(config_id: str):
     try:
         int_type = IntegrationType(config.type)
         
-        if config.is_source:
-            integration = create_source(int_type, config.config)
-            async with integration:
-                files = await integration.list_files(extensions=CONVERTIBLE_EXTENSIONS[:5])
-            return {
-                "success": True,
-                "message": f"Successfully connected. Found {len(files)} files.",
-                "sample_files": [
-                    {"name": f.name, "path": f.path, "modified_at": f.modified_at.isoformat()}
-                    for f in files[:10]
-                ]
-            }
-        else:
-            integration = create_destination(int_type, config.config)
-            async with integration:
-                files = await integration.list_files(extensions=[".md"])
-            return {
-                "success": True,
-                "message": f"Successfully connected. Found {len(files)} markdown files.",
-                "sample_files": [
-                    {"name": f.name, "path": f.path, "modified_at": f.modified_at.isoformat()}
-                    for f in files[:10]
-                ]
-            }
+        integration = (
+            create_source(int_type, config.config) if config.is_source
+            else create_destination(int_type, config.config)
+        )
+        async with integration:
+            files = await integration.list_files(
+                extensions=CONVERTIBLE_EXTENSIONS if config.is_source else MARKDOWN_EXTENSIONS
+            )
+        return {
+            "success": True,
+            "message": f"Successfully connected. Found {len(files)} files.",
+            "sample_files": [f.model_dump(mode="json") for f in files[:10]],
+        }
     except Exception as e:
         return {
             "success": False,
             "message": str(e),
             "sample_files": []
         }
+
+
+@app.get("/configurations/{config_id}/test/download")
+async def download_configuration_files(
+    config_id: str, format: Literal["csv", "zip"] = Query(...)
+):
+    """Export all listed file metadata or download all files as a ZIP."""
+    config = await get_configuration(config_id)
+    temporary = None
+    response_ready = False
+    try:
+        connection_name = "".join(
+            "_" if char in '<>:"/\\|?*' or ord(char) < 32 else char
+            for char in config.name if not char.isspace()
+        )
+        int_type = IntegrationType(config.type)
+        integration = (
+            create_source(int_type, config.config) if config.is_source
+            else create_destination(int_type, config.config)
+        )
+        async with integration:
+            files = await integration.list_files(
+                extensions=CONVERTIBLE_EXTENSIONS if config.is_source else MARKDOWN_EXTENSIONS
+            )
+            if format == "csv":
+                metadata = [
+                    {
+                        **file.model_dump(mode="json"),
+                        "stem": file.stem,
+                        "suffix": file.suffix,
+                        "parent_path": file.parent_path,
+                    }
+                    for file in files
+                ]
+                output = StringIO(newline="")
+                writer = csv.DictWriter(
+                    output,
+                    fieldnames=[*FileInfo.model_fields, "stem", "suffix", "parent_path"],
+                )
+                writer.writeheader()
+                writer.writerows(metadata)
+                filename = f"{connection_name}_fileinfo.csv"
+                encoded_filename = quote(filename, safe="")
+                disposition = (
+                    f"attachment; filename*=UTF-8''{encoded_filename}"
+                    if encoded_filename != filename
+                    else f'attachment; filename="{filename}"'
+                )
+                return Response(
+                    content=output.getvalue(),
+                    media_type="text/csv",
+                    headers={"Content-Disposition": disposition},
+                )
+
+            temporary = TemporaryDirectory(prefix="configuration_download_")
+            archive_path = Path(temporary.name) / "files.zip"
+            used_paths: set[str] = set()
+            with ZipFile(archive_path, "w", compression=ZIP_DEFLATED) as archive:
+                for index, file in enumerate(files):
+                    # Remote paths must never become local staging paths or unsafe ZIP entries.
+                    relative = PurePosixPath(file.path.replace("\\", "/").lstrip("/"))
+                    archive_name = relative.as_posix()
+                    if (
+                        not relative.parts or ".." in relative.parts
+                        or ":" in relative.parts[0]
+                        or archive_name in used_paths
+                    ):
+                        raise ValueError(f"Unsafe or duplicate file path: {file.path}")
+                    used_paths.add(archive_name)
+                    local_path = Path(temporary.name) / f"file-{index}"
+                    if not await integration.download_file(file, local_path):
+                        raise RuntimeError(f"Failed to download file: {file.path}")
+                    await asyncio.to_thread(archive.write, local_path, archive_name)
+                    await asyncio.to_thread(local_path.unlink)
+
+        response = FileResponse(
+            archive_path,
+            media_type="application/zip",
+            filename=f"{connection_name}_files.zip",
+            background=BackgroundTask(temporary.cleanup),
+        )
+        response_ready = True
+        return response
+    except Exception as e:
+        logger.exception("File export failed for configuration %s", config_id)
+        raise HTTPException(status_code=502, detail=f"File export failed: {e}") from e
+    finally:
+        if temporary is not None and not response_ready:
+            temporary.cleanup()
 
 
 # ============== Job from Configurations ==============
