@@ -9,7 +9,7 @@ apscheduler[mongodb]==4.0.0a6
 httpx==0.28.1
 
 # mongodb
-pymongo==4.18.2
+pymongo==4.18.3
 
 # conversion
 markitdown[all]==0.1.8
