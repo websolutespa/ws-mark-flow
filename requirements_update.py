@@ -202,6 +202,9 @@ def update_requirements(requirements_path='requirements.txt', dry_run=False):
 
 if __name__ == '__main__':
     import argparse
+
+    # The report prints non-ASCII symbols; legacy Windows consoles (cp1252) can't encode them.
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     
     parser = argparse.ArgumentParser(
         description='Check for newer package versions and update requirements.txt'

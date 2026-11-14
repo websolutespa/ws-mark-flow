@@ -1,0 +1,9 @@
+{
+    // Recommended when opening the workspace (Extensions view > Recommended).
+    "recommendations": [
+        // "type": "debugpy" launch configurations
+        "ms-python.debugpy",
+        // interpreter selection used by the debugpy launches
+        "ms-python.python"
+    ]
+}

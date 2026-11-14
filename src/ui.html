@@ -46,7 +46,8 @@
     </style>
 </head>
 <body class="min-h-screen text-slate-800">
-    <div x-data="converterApp()" x-init="init()">
+    <!-- Alpine calls converterApp().init() automatically: no x-init, or it runs twice -->
+    <div x-data="converterApp()">
         <!-- Header -->
         <header class="border-b border-slate-200/70 bg-white/70 backdrop-blur-md sticky top-0 z-40">
             <div class="container mx-auto px-6 py-4 flex items-center justify-between">
@@ -1476,14 +1477,16 @@ relations:
             </div>
         </div>
 
-        <!-- Loading Overlay -->
-        <div x-show="loading" x-cloak
-             class="fixed inset-0 modal-backdrop flex items-center justify-center z-50">
-            <div class="bg-white px-8 py-6 rounded-2xl shadow-pop flex flex-col items-center">
-                <div class="spinner"></div>
-                <p class="mt-4 text-sm font-medium text-slate-600">Loading...</p>
+        <!-- Loading Overlay: x-if, not x-show. x-show defers "show" with setTimeout, so a request
+             that finishes before the timer fires (e.g. a tiny [] response) leaves it stuck visible. -->
+        <template x-if="loading">
+            <div class="fixed inset-0 modal-backdrop flex items-center justify-center z-50">
+                <div class="bg-white px-8 py-6 rounded-2xl shadow-pop flex flex-col items-center">
+                    <div class="spinner"></div>
+                    <p class="mt-4 text-sm font-medium text-slate-600">Loading...</p>
+                </div>
             </div>
-        </div>
+        </template>
         </main>
     </div>
 

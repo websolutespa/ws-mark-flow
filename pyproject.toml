@@ -1,3 +1,28 @@
 [build-system]
 requires = ["setuptools >= 75"]
 build-backend = "setuptools.build_meta"
+
+# ---- tests & coverage -------------------------------------------------------
+# `pytest`        -> fast run, no coverage
+# `pytest --cov`  -> coverage report, fails below [tool.coverage.report].fail_under
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-ra --strict-markers"
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "@(abc\\.)?abstractmethod",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]

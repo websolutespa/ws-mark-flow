@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-import fitz  # PyMuPDF
+import pymupdf
 
 # conversion libraries
 from markitdown import MarkItDown
@@ -79,7 +79,7 @@ def _analyze_pdf_complexity(input_path: Path) -> PdfAnalysis:
     """
     analysis = PdfAnalysis()
     try:
-        doc = fitz.open(str(input_path))
+        doc = pymupdf.open(str(input_path))
         analysis.page_count = doc.page_count
 
         if analysis.page_count == 0:

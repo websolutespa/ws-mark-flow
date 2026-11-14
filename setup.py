@@ -36,6 +36,8 @@ setup(
     license="MIT",
     classifiers=[
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
         "Operating System :: OS Independent",
     ],
     python_requires=">=3.12",

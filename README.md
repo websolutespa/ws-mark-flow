@@ -126,18 +126,45 @@ uv venv
 
 ```bash
 python -m requirements_update
-uv pip install --upgrade -r requirements.txt
+python -m requirements_update requirements-dev.txt
+uv pip install --upgrade -r requirements.txt -r requirements-dev.txt
+# always re-run the test suite after an update (see "unit tests" below)
+pytest --cov
 ```
 
-- build tools
+- dev tools (tests, build/publish, code quality)
 
 ```bash
-uv pip install --upgrade setuptools build twine 
+uv pip install --upgrade -r requirements-dev.txt
 ```
+
+### ▶️ VS Code launch configurations
+
+`.vscode/launch.json` groups the common commands in the Run and Debug dropdown.
+Python entries use the interpreter selected in VS Code and need the Python Debugger
+extension (`ms-python.debugpy`), recommended in `.vscode/extensions.json`.
+
+| Group | Name | Does |
+|-------|------|------|
+| app | `app:run` | uvicorn with `--reload` on port 8000 |
+| app | `app:debug` | uvicorn without reload, `justMyCode: false` |
+| test | `test:run` / `test:cov` | pytest / pytest with coverage gate + `htmlcov/` |
+| test | `test:file` | debug the test file open in the editor |
+| test | `test:live` | live tests against the MongoDB in `.env` (see below) |
+| quality | `quality:lint` / `quality:complexity` / `quality:security` / `quality:reqs` | prospector profiles and scanreq (see below) |
+| docker | `docker:build` / `docker:run` | build `./app` image, run it on port 8080 with the root `.env` |
+| dist | `dist:check` | `python release.py`: bump the version if already on PyPI, clean, build, `twine check --strict` |
+| dist | `dist:publish` | `twine upload --verbose dist/*` (kept separate on purpose) |
 
 ### 🪛 build
 
-- clean dist and build package
+- bump the patch version if the current one is already on PyPI, clean, build and check (`--dry-run` only reports)
+
+```bash
+python release.py
+```
+
+- or manually: clean dist and build package
 
 ```pwsh
 if (Test-Path ./dist) {rm ./dist -r -force}; `
@@ -150,6 +177,43 @@ python -m build && twine check dist/*
 [ -d ./dist ] && rm -rf ./dist
 python -m build && twine check dist/*
 ```
+
+### ✅ unit tests
+
+The suite under `tests/` is hermetic: no network (non-loopback sockets are
+blocked), no MongoDB, no LLM calls, no Docling model loading and the local
+`.env` is never read. External SDKs are faked at the client or HTTP transport
+level, so an incompatible dependency upgrade fails a test instead of production.
+
+```bash
+uv pip install -U -r requirements-dev.txt
+# fast run
+pytest
+# with coverage: fails below the threshold set in pyproject.toml ([tool.coverage.report].fail_under)
+pytest --cov
+# html report in ./htmlcov
+pytest --cov --cov-report=html
+```
+
+Known bugs are pinned with `@pytest.mark.xfail(strict=True, reason="BUG: ...")`:
+once a bug is fixed the test starts passing and must be un-marked.
+
+#### live tests (MongoDB)
+
+`tests/live/` runs the storages and the app (real lifespan, APScheduler MongoDB
+data store, local-folder source/destination) against a real MongoDB. They are
+skipped unless `--live` is passed, and are not part of the coverage gate.
+
+```bash
+pytest tests/live --live -rs
+```
+
+- connection: `MONGODB_URI` / `MONGODB_DATABASE` from the shell, else only those
+  two keys from `.env`
+- database: `{MONGODB_DATABASE}-tests-live`, dropped before every test and at
+  the end of the run; the configured database is never touched
+- the end-to-end conversion test is skipped on Windows until the pinned
+  `run_conversion` path bug is fixed
 
 ### 📦 test / 🧪 debugger
 
@@ -164,7 +228,6 @@ code quality tools
   
 ```pwsh
 # .\src\robot
-uv pip install -U scanreq prospector[with_everything]
 ## unused requirements
 scanreq -r requirements.txt -p ./src
 ## style/linting
@@ -179,7 +242,7 @@ prospector ./src -t pyroma
 
 ### ✈️ publish
 
-- [pypi](https://pypi.org/project/ws-mark-flow/)
+- [pypi](https://pypi.org/project/ws-mark-flow/), after `python release.py`
 
   ```bash
   twine upload --verbose dist/* 

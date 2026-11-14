@@ -1,31 +1,157 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    // Python entries run with the interpreter selected in VS Code (no venv activation needed).
+    // Entries are grouped in the Run and Debug dropdown via presentation.group.
     "version": "0.2.0",
     "configurations": [
+        // ---- app ---------------------------------------------------------------
         {
-            "name": "app:watch",
-            "type": "node-terminal",
+            "name": "app:run",
+            "type": "debugpy",
             "request": "launch",
-            "command": "source .venv/bin/activate && uvicorn src.main:app --reload --host 0.0.0.0 --port 8000",
-            "cwd": "${cwd}"
-        },        
+            "module": "uvicorn",
+            "args": ["src.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "presentation": { "group": "1-app", "order": 1 }
+        },
         {
+            // no --reload: breakpoints stay reliable, library code included
             "name": "app:debug",
             "type": "debugpy",
             "request": "launch",
             "module": "uvicorn",
-            "args": [
-                "src.main:app",
-                "--reload",
-                "--host",
-                "0.0.0.0",
-                "--port",
-                "8000"
-            ],
+            "args": ["src.main:app", "--host", "0.0.0.0", "--port", "8000"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
             "justMyCode": false,
-            "jinja": true
+            "presentation": { "group": "1-app", "order": 2 }
+        },
+        // ---- test --------------------------------------------------------------
+        {
+            "name": "test:run",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "presentation": { "group": "2-test", "order": 1 }
+        },
+        {
+            // coverage gate from pyproject.toml; html report in ./htmlcov
+            "name": "test:cov",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": ["--cov", "--cov-report=term-missing", "--cov-report=html"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "presentation": { "group": "2-test", "order": 2 }
+        },
+        {
+            // debug the test file open in the editor
+            "name": "test:file",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": ["${file}", "-vv"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "presentation": { "group": "2-test", "order": 3 }
+        },
+        {
+            // tests/live against the MongoDB in .env, on a fresh {MONGODB_DATABASE}-tests-live db
+            "name": "test:live",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": ["tests/live", "--live", "-rs"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "presentation": { "group": "2-test", "order": 4 }
+        },
+        // ---- code quality ------------------------------------------------------
+        {
+            "name": "quality:lint",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "prospector",
+            "args": ["./src", "-t", "pylint", "-t", "pydocstyle"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "presentation": { "group": "3-quality", "order": 1 }
+        },
+        {
+            "name": "quality:complexity",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "prospector",
+            "args": ["./src", "-t", "vulture", "-t", "mccabe", "-t", "mypy"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "presentation": { "group": "3-quality", "order": 2 }
+        },
+        {
+            "name": "quality:security",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "prospector",
+            "args": ["./src", "-t", "dodgy", "-t", "bandit"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "presentation": { "group": "3-quality", "order": 3 }
+        },
+        {
+            // unused / missing requirements
+            "name": "quality:reqs",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "scanreq",
+            "args": ["-r", "requirements.txt", "-p", "./src"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "presentation": { "group": "3-quality", "order": 4 }
+        },
+        // ---- docker ------------------------------------------------------------
+        {
+            // the image installs ws-mark-flow from PyPI (latest published version)
+            "name": "docker:build",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "docker build -t ws-mark-flow ./app",
+            "cwd": "${workspaceFolder}",
+            "presentation": { "group": "4-docker", "order": 1 }
+        },
+        {
+            // http://localhost:8080 ; from the container reach host services via host.docker.internal
+            "name": "docker:run",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "docker run --rm -it --name ws-mark-flow -p 8080:80 --env-file .env.docker --add-host=host.docker.internal:host-gateway ws-mark-flow",
+            "cwd": "${workspaceFolder}",
+            "presentation": { "group": "4-docker", "order": 2 }
+        },
+        // ---- dist --------------------------------------------------------------
+        {
+            // bump setup.py version if already on PyPI, clean, build, twine check
+            "name": "dist:check",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/release.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "presentation": { "group": "5-dist", "order": 1 }
+        },
+        {
+            // uploads whatever dist:check built
+            "name": "dist:publish",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "twine",
+            "args": ["upload", "--verbose", "dist/*"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "presentation": { "group": "5-dist", "order": 2 }
         }
     ]
 }
