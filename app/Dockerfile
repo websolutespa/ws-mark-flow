@@ -15,10 +15,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# 1) System deps — changes very rarely, gets cached
+# 1) System deps — changes very rarely, gets cached.
+#    `upgrade` pulls Debian security fixes not yet in the base image (e.g. zlib1g).
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
+    apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
         libmagic1 \
         libgl1 \
         libglib2.0-0 \
@@ -27,8 +30,11 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 # 2) Python deps. Install CPU-only torch first so the ws-mark-flow dependency
 #    resolver cannot pull the much larger default CUDA wheels from PyPI.
+#    pip is the installer itself, so it cannot be pinned by the package: upgrade it here.
+#    setuptools (old on the PyTorch index) is pinned by ws-mark-flow's requirements.
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    pip install \
+    pip install --upgrade pip \
+    && pip install \
         --index-url https://download.pytorch.org/whl/cpu \
         --upgrade \
         torch \

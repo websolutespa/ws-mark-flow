@@ -53,3 +53,8 @@ PyYAML==6.0.3
 
 # dev
 python-dotenv==1.2.4
+
+# security floor, not imported by the code: torch pulls setuptools from the
+# PyTorch index (old releases only); this pin upgrades it, and the wheel /
+# jaraco.context copies it vendors, to a patched version
+setuptools==84.2.1
